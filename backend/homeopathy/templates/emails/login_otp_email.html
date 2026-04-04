@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LIT Coffee Leelaprasad – Login Verification</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f5f8fa;
+    }
+    table {
+      border-spacing: 0;
+    }
+    td {
+      padding: 0;
+    }
+    img {
+      border: 0;
+      display: block;
+    }
+    .wrapper {
+      width: 100%;
+      table-layout: fixed;
+      background: #f5f8fa;
+      padding: 20px 0;
+    }
+    .main {
+      background: #ffffff;
+      margin: 0 auto;
+      width: 100%;
+      max-width: 600px;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+    }
+    .header {
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(135deg, #ffffff, #f8f8f8);
+    }
+    .logo {
+      width: 120px;
+      height: auto;
+    }
+    .content {
+      padding: 30px 20px;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      color: #333333;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    h2 {
+      color: #333333;
+      font-size: 22px;
+      margin-bottom: 16px;
+    }
+    p {
+      color: #555555;
+      font-size: 14px;
+      margin: 0 0 15px;
+    }
+    .otp {
+      display: inline-block;
+      background: #e0f0e6;
+      color: #005021;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 24px;
+      letter-spacing: 4px;
+      margin: 20px 0;
+      font-weight: bold;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    .button {
+      display: inline-block;
+      padding: 10px 20px;
+      background-color: #005021;
+      color: #fff !important;
+      text-decoration: none;
+      border-radius: 8px;
+      margin-top: 20px;
+      font-weight: bold;
+      text-align: center;
+    }
+    .footer {
+      padding: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #777777;
+    }
+    .footer a {
+      color: #005021;
+      text-decoration: none;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    .social-icons {
+      margin-top: 15px;
+      text-align: center;
+    }
+    .social-icons a {
+      display: inline-block;
+      margin: 0 8px;
+    }
+    .social-icons img {
+      width: 24px;
+      height: 24px;
+    }
+
+    @media screen and (max-width: 600px) {
+      .content {
+        padding: 20px 15px;
+      }
+      .otp {
+        font-size: 20px;
+        padding: 10px 20px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <center class="wrapper">
+    <table class="main" width="100%">
+
+      <!-- HEADER -->
+      <tr>
+        <td class="header">
+          <img src="https://res.cloudinary.com/dvt1wv1dy/image/upload/v1764830017/litcoffee_cldarj.png"
+               alt="LIT Coffee Leelaprasad Logo"
+               class="logo">
+        </td>
+      </tr>
+
+      <!-- CONTENT -->
+      <tr>
+        <td class="content">
+          <h2>Hello {{ user.first_name|default:user.username }},</h2>
+
+          <p>We detected a login request to your LIT Coffee Leelaprasad account. Please verify this login attempt using the OTP below:</p>
+
+          <div class="otp">{{ otp_code }}</div>
+
+          <p>This code is valid for <strong>4 minutes</strong>. If you did not attempt to log in, we strongly recommend changing your password immediately.</p>
+
+          <p>Stay secure,<br>The LIT Coffee Leelaprasad Team</p>
+
+          <a href="https://www.litcoffee.in/support" class="button">Get Support</a>
+        </td>
+      </tr>
+
+      <!-- FOOTER -->
+      <tr>
+        <td class="footer">
+          <p>Connect with us:</p>
+          <div class="social-icons">
+            <a href="#" target="_blank">
+              <img src="https://cdn-icons-png.flaticon.com/512/3046/3046122.png" alt="TikTok">
+            </a>
+            <a href="#" target="_blank">
+              <img src="https://cdn-icons-png.flaticon.com/512/733/733579.png" alt="Twitter">
+            </a>
+            <a href="#" target="_blank">
+              <img src="https://cdn-icons-png.flaticon.com/512/1384/1384063.png" alt="Instagram">
+            </a>
+            <a href="#" target="_blank">
+              <img src="https://cdn-icons-png.flaticon.com/512/1384/1384014.png" alt="LinkedIn">
+            </a>
+          </div>
+
+          <p style="margin-top: 10px;">&copy; 2025 LIT Coffee Leelaprasad. All rights reserved.</p>
+        </td>
+      </tr>
+
+    </table>
+  </center>
+</body>
+</html>

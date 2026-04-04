@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: homeopathy-backend
+    env: python
+    buildCommand: ./build.sh
+    startCommand: gunicorn myproject.wsgi:application
+    rootDir: backend
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: homeopathy-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: PYTHON_VERSION
+        value: "3.10.0"
+
+databases:
+  - name: homeopathy-db
+    plan: free

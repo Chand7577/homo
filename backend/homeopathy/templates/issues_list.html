@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Submitted Issues</title>
+</head>
+<body>
+    <h1>All Submitted Issues</h1>
+    <ul>
+        {% for issue in issues %}
+            <li>
+                <strong>{{ issue.name }} ({{ issue.email }})</strong><br>
+                {{ issue.issue }}<br>
+                <em>Submitted at: {{ issue.submitted_at }}</em>
+            </li>
+        {% empty %}
+            <li>No issues submitted yet.</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

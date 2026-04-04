@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat with AI</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .chat-box { max-width: 600px; margin: auto; }
+        .message { margin-bottom: 20px; }
+        .user { color: blue; }
+        .ai { color: green; }
+    </style>
+</head>
+<body>
+    <div class="chat-box">
+        <h1>Chat with AI</h1>
+        <form method="post">
+            {% csrf_token %}
+            <input type="text" name="message" placeholder="Type your message" value="{{ user_message }}" style="width:80%;" required>
+            <button type="submit">Send</button>
+        </form>
+
+        {% if user_message %}
+            <div class="message user"><strong>You:</strong> {{ user_message }}</div>
+        {% endif %}
+
+        {% if ai_reply %}
+            <div class="message ai"><strong>AI:</strong> {{ ai_reply }}</div>
+        {% endif %}
+    </div>
+</body>
+</html>
