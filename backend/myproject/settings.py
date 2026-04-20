@@ -33,6 +33,7 @@ ADMIN_CREDENTIALS = {
 
 
 INSTALLED_APPS = [
+    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
     "cloudinary",
     "cloudinary_storage",
 ]
+
 
 
 AUTH_USER_MODEL = "homeopathy.CustomUser"
