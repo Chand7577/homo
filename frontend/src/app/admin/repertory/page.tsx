@@ -26,7 +26,7 @@ import {
 import RubricModal from "@/components/RubricModal";
 import MedicineModal from "@/components/MedicineModal";
 
-const API_BASE = "http://127.0.0.1:8000/homeopathy";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 interface Rubric {
   id: number;

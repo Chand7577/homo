@@ -39,7 +39,7 @@ const AdminSidebar = () => {
     try {
       // Call backend logout endpoint
       const res = await fetch(
-        "http://127.0.0.1:8000/homeopathy/admin/logout/",
+        "https://homo-backend-sumy.onrender.com/homeopathy/admin/logout/",
         {
           method: "POST",
           credentials: "include",

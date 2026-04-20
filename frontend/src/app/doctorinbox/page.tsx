@@ -33,7 +33,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 
-const API_BASE = "http://127.0.0.1:8000/homeopathy";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 const DoctorInbox = () => {
   // State

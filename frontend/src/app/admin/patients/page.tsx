@@ -23,7 +23,7 @@ import PatientRegistrationModal from "@/components/PatientRegistrationModal";
 import PatientDetailModal from "@/components/PatientDetailModal";
 // import PatientEditModal from '@/components/PatientEditModal'; // You'll need to create this
 
-const API_BASE = "http://127.0.0.1:8000/homeopathy";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 interface Patient {
   id: number;

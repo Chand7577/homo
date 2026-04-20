@@ -9,7 +9,7 @@ import {
   Hash, Info, Table2, FlaskConical, Microscope, Mic, MicOff
 } from "lucide-react";
 
-const API_BASE = "http://127.0.0.1:8000/homeopathy";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Chapter { id: number; name: string; name_hindi?: string; }

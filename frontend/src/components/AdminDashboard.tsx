@@ -23,7 +23,7 @@ import { useRouter } from "next/navigation";
 import { LucideIcon } from "lucide-react";
 
 // API Configuration
-const API_BASE = "http://127.0.0.1:8000/homeopathy";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 const adminAPI = {
   getDashboardStats: async () => {
@@ -235,7 +235,7 @@ const AdminDashboard = () => {
       }
 
       // Download the backup file
-      const downloadUrl = `http://127.0.0.1:8000/homeopathy/admin/backup/download/${data.backup.filename}/`;
+      const downloadUrl = `https://homo-backend-sumy.onrender.com/homeopathy/admin/backup/download/${data.backup.filename}/`;
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.download = data.backup.filename;

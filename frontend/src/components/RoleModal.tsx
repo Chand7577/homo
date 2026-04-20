@@ -17,7 +17,7 @@ interface RoleModalProps {
   onSelect: (role: UserRole) => void;
 }
 
-const API_BASE = "http://127.0.0.1:8000/homeopathy";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 export default function RoleModal({ onSelect }: RoleModalProps) {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
