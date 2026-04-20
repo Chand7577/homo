@@ -859,6 +859,7 @@ def get_doctors(request, doctor_id=None):
             status=500
         )
 
+
 @csrf_exempt
 def doctor_send_otp(request):
     """Send OTP to doctor email for login"""
@@ -877,13 +878,32 @@ def doctor_send_otp(request):
         return JsonResponse({'error': 'Email and password are required'}, status=400)
 
     # Check if doctor exists and verify password
+    logger.debug(f"DEBUG: Login attempt for Doctor Email: {email}")
     try:
-        user = CustomUser.objects.get(email=email, user_type='doctor', is_active=True)
-        if not check_password(password, user.password):
+        # First check if user exists at all
+        user = CustomUser.objects.filter(email=email, is_active=True).first()
+        if not user:
+            logger.warning(f"DEBUG: Login failed - No active user found with email: {email}")
             return JsonResponse({'error': 'Invalid credentials'}, status=401)
         
-        doctor = Doctor.objects.get(user=user, is_active=True)
-    except (CustomUser.DoesNotExist, Doctor.DoesNotExist):
+        # Check user type
+        if user.user_type != 'doctor':
+            logger.warning(f"DEBUG: Login failed - User {email} is a {user.user_type}, not a doctor")
+            return JsonResponse({'error': 'Invalid credentials'}, status=401)
+
+        # Verify password
+        if not check_password(password, user.password):
+            logger.warning(f"DEBUG: Login failed - Password mismatch for email: {email}")
+            return JsonResponse({'error': 'Invalid credentials'}, status=401)
+        
+        # Get doctor profile
+        doctor = Doctor.objects.filter(user=user, is_active=True).first()
+        if not doctor:
+            logger.warning(f"DEBUG: Login failed - Active Doctor profile missing for user: {email}")
+            return JsonResponse({'error': 'Invalid credentials'}, status=401)
+            
+    except Exception as e:
+        logger.error(f"DEBUG: Unexpected error during doctor login check: {str(e)}")
         return JsonResponse({'error': 'Invalid credentials'}, status=401)
 
     # Generate 6-digit OTP
@@ -927,182 +947,6 @@ def doctor_send_otp(request):
         'email': email
     })
 
-
-@csrf_exempt
-def doctor_verify_otp(request):
-    """Verify OTP and complete doctor login"""
-    if request.method != "POST":
-        return JsonResponse({'error': 'POST method required'}, status=405)
-
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
-    email = data.get('email', '').strip()
-    otp = data.get('otp', '').strip()
-
-    if not email or not otp:
-        return JsonResponse({'error': 'Email and OTP are required'}, status=400)
-
-    # Verify OTP from session
-    stored_otp = request.session.get('doctor_otp')
-    stored_email = request.session.get('doctor_email_pending')
-    doctor_id = request.session.get('doctor_id_pending')
-    otp_timestamp_str = request.session.get('otp_timestamp')
-
-    if not stored_otp or not stored_email or not otp_timestamp_str:
-        return JsonResponse({'error': 'No OTP found. Please request a new one.'}, status=400)
-
-    # Check if OTP expired (10 minutes)
-    otp_timestamp = timezone.datetime.fromisoformat(otp_timestamp_str)
-    if timezone.now() - otp_timestamp > timedelta(minutes=10):
-        return JsonResponse({'error': 'OTP expired. Please request a new one.'}, status=400)
-
-    # Verify email and OTP match
-    if stored_email != email or stored_otp != otp:
-        return JsonResponse({'error': 'Invalid OTP'}, status=401)
-
-    # Get doctor details
-    try:
-        doctor = Doctor.objects.select_related('user').get(id=doctor_id, is_active=True)
-    except Doctor.DoesNotExist:
-        return JsonResponse({'error': 'Doctor account not found'}, status=404)
-
-    # Clear OTP data
-    del request.session['doctor_otp']
-    del request.session['doctor_email_pending']
-    del request.session['doctor_id_pending']
-    del request.session['otp_timestamp']
-
-    # Set doctor session
-    request.session['is_doctor'] = True
-    request.session['doctor_id'] = doctor.id
-    request.session['doctor_email'] = email
-    request.session['doctor_name'] = doctor.user.get_full_name()
-    request.session.save()
-
-    return JsonResponse({
-        'success': True,
-        'message': 'Login successful',
-        'doctor': {
-            'id': doctor.id,
-            'email': email,
-            'name': doctor.user.get_full_name(),
-            'specialization': doctor.specialization,
-            'role': 'doctor'
-        }
-    })
-
-
-@csrf_exempt
-def doctor_check_auth(request):
-    """Check if doctor is authenticated"""
-    is_doctor = request.session.get('is_doctor', False)
-    
-    if is_doctor:
-        doctor_id = request.session.get('doctor_id')
-        try:
-            doctor = Doctor.objects.select_related('user').get(id=doctor_id, is_active=True)
-            return JsonResponse({
-                'authenticated': True,
-                'doctor': {
-                    'id': doctor.id,
-                    'email': doctor.user.email,
-                    'name': doctor.user.get_full_name(),
-                    'specialization': doctor.specialization,
-                    'role': 'doctor'
-                }
-            })
-        except Doctor.DoesNotExist:
-            # Session exists but doctor not found - clear session
-            request.session.flush()
-            return JsonResponse({'authenticated': False, 'doctor': None})
-    
-    return JsonResponse({'authenticated': False, 'doctor': None})
-
-
-@csrf_exempt
-def doctor_logout(request):
-    """Doctor logout endpoint"""
-    if request.method != "POST":
-        return JsonResponse({'error': 'POST method required'}, status=405)
-    
-    if request.session.get('is_doctor'):
-        request.session.flush()
-        return JsonResponse({'success': True, 'message': 'Logged out successfully'})
-    
-    return JsonResponse({'error': 'No doctor logged in'}, status=400)
-
-
-
-@csrf_exempt
-def doctor_send_otp(request):
-    """Send OTP to doctor email for login"""
-    if request.method != "POST":
-        return JsonResponse({'error': 'POST method required'}, status=405)
-
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
-    email = data.get('email', '').strip()
-    password = data.get('password', '').strip()
-
-    if not email or not password:
-        return JsonResponse({'error': 'Email and password are required'}, status=400)
-
-    # Check if doctor exists and verify password
-    try:
-        user = CustomUser.objects.get(email=email, user_type='doctor', is_active=True)
-        if not check_password(password, user.password):
-            return JsonResponse({'error': 'Invalid credentials'}, status=401)
-        
-        doctor = Doctor.objects.get(user=user, is_active=True)
-    except (CustomUser.DoesNotExist, Doctor.DoesNotExist):
-        return JsonResponse({'error': 'Invalid credentials'}, status=401)
-
-    # Generate 6-digit OTP
-    otp = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
-    
-    # Store OTP in session
-    if not request.session.session_key:
-        request.session.create()
-    
-    request.session['doctor_otp'] = otp
-    request.session['doctor_email_pending'] = email
-    request.session['doctor_id_pending'] = doctor.id
-    request.session['otp_timestamp'] = timezone.now().isoformat()
-    request.session.save()
-
-    # Send OTP email
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <body style="font-family: Arial, sans-serif;">
-        <h2>Doctor Login OTP</h2>
-        <p>Dear Dr. {user.get_full_name()},</p>
-        <p>Your OTP for login is:</p>
-        <div style="background: #f5f5f5; padding: 15px; margin: 20px 0; text-align: center;">
-            <h1 style="color: #333; font-size: 32px; letter-spacing: 5px; margin: 0;">{otp}</h1>
-        </div>
-        <p>This OTP will expire in 10 minutes.</p>
-        <p>If you didn't request this, please ignore this email.</p>
-    </body>
-    </html>
-    """
-    
-    send_email_notification(email, "Doctor Login OTP - Homeopathy Portal", html_content)
-
-    # Also log OTP to console for development
-    logger.info(f"Doctor OTP for {email}: {otp}")
-
-    return JsonResponse({
-        'success': True,
-        'message': 'OTP sent to your email',
-        'email': email
-    })
 
 
 @csrf_exempt
