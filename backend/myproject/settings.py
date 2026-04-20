@@ -1,7 +1,10 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 import cloudinary
 import dj_database_url
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -9,13 +12,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-homeopathy-change-in-
 
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    "10.139.168.199", 
-    ".onrender.com",
-    "*", 
-]
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 
 SITE_URL = "http://localhost:8000"
@@ -23,13 +20,13 @@ SITE_URL = "http://localhost:8000"
 
 ADMIN_CREDENTIALS = {
     'admin1': {
-        'email':'amritchand0713@gmail.com',
-        'password': 'Admin@123',
+        'email': os.environ.get('ADMIN1_EMAIL', 'amritchand0713@gmail.com'),
+        'password': os.environ.get('ADMIN1_PASSWORD', 'Admin@123'),
         'name': 'System Administrator'
     },
     'admin2': {
-        'email': 'superadmin@homeopathy.com',
-        'password': 'SuperAdmin@123',
+        'email': os.environ.get('ADMIN2_EMAIL', 'superadmin@homeopathy.com'),
+        'password': os.environ.get('ADMIN2_PASSWORD', 'SuperAdmin@123'),
         'name': 'Super Administrator'
     }
 }

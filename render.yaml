@@ -5,6 +5,7 @@ services:
     buildCommand: ./build.sh
     startCommand: gunicorn myproject.wsgi:application
     rootDir: backend
+    plan: free
     envVars:
       - key: DATABASE_URL
         fromDatabase:
