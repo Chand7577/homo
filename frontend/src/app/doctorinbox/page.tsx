@@ -1103,7 +1103,6 @@ const DoctorInbox = () => {
 
                             <div className="flex items-center gap-3 flex-1 justify-end w-full sm:w-auto">
                               <div className="relative flex-1 max-w-[200px]">
-                                <BookOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
                                 <select 
                                   value={selectedChapterId || ""} 
                                   onChange={(e) => {
@@ -1111,7 +1110,7 @@ const DoctorInbox = () => {
                                     setSelectedChapterId(newId);
                                     if (repertoryResult) handleAnalyzeSymptoms(newId);
                                   }}
-                                  className="w-full pl-8 pr-6 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500/30 appearance-none cursor-pointer shadow-sm"
+                                  className="w-full pl-3 pr-6 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500/30 appearance-none cursor-pointer shadow-sm"
                                 >
                                   <option value="">All Chapters (Full Search)</option>
                                   {chapters.map(ch => (
