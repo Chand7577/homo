@@ -38,6 +38,15 @@ import {
 
 const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
+const GRADE_COLORS = [
+  "", 
+  "bg-slate-100 text-slate-600", 
+  "bg-blue-100 text-blue-700",
+  "bg-teal-100 text-teal-700", 
+  "bg-violet-100 text-violet-800", 
+  "bg-amber-100 text-amber-700"
+];
+
 const DoctorInbox = () => {
   // State
   const [messages, setMessages] = useState([]);
@@ -54,6 +63,10 @@ const DoctorInbox = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [replyText, setReplyText] = useState("");
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [chapters, setChapters] = useState([]);
+  const [selectedChapterId, setSelectedChapterId] = useState(null);
+  const [repertoryResult, setRepertoryResult] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const chatContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -303,36 +316,51 @@ const DoctorInbox = () => {
     }
   };
 
-  const handleAnalyzeSymptoms = async () => {
-   
+  const handleAnalyzeSymptoms = async (chapterId = null) => {
     if (!selectedMessage) return;
     const text = selectedMessage.problem_description || selectedMessage.message;
     if (!text) return;
 
     setAnalyzing(true);
+    setRepertoryResult(null);
     try {
+      // Use the advanced repertorize endpoint to get the full table data
       const response = await fetch(
-        `${API_BASE}/doctor/rubrics/search/?query=${encodeURIComponent(text.substring(0, 500))}`,
+        `${API_BASE}/doctor/rubrics/repertorize/`,
         {
-          method: "GET",
+          method: "POST",
           credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            chapter_id: chapterId, 
+            symptoms: [text], // Pass the whole text as one symptom for context
+            top_n: 3 
+          }),
         },
       );
 
       if (response.ok) {
         const data = await response.json();
+        if (data.success) {
+          setRepertoryResult(data);
+          
+          // Also update the message's matched rubrics for persistence if needed
+          const topRubrics = data.top_rubrics.map(r => ({
+            id: r.id,
+            name: r.name,
+            full_path: r.full_path,
+            medicines: r.medicines
+          }));
 
-        console.log(data);
-        if (data.success && data.rubrics) {
           setSelectedMessage((prev) => ({
             ...prev,
-            matched_rubrics: data.rubrics,
+            matched_rubrics: topRubrics,
           }));
 
           setMessages((prev) =>
             prev.map((m) =>
               m.id === selectedMessage.id
-                ? { ...m, matched_rubrics: data.rubrics }
+                ? { ...m, matched_rubrics: topRubrics }
                 : m,
             ),
           );
@@ -347,6 +375,11 @@ const DoctorInbox = () => {
 
   useEffect(() => {
     fetchInbox();
+    // Fetch chapters for analysis
+    fetch(`${API_BASE}/doctor/rubrics/chapters/`, { credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (d.success) setChapters(d.chapters || []); })
+      .catch(err => console.error("Failed to load chapters", err));
   }, [statusFilter]);
 
   // Polling for live updates
@@ -1020,83 +1053,194 @@ const DoctorInbox = () => {
                     )}
                   </div>
 
-                  {/* CLINICAL ANALYSIS STRIP — fixed between header and thread */}
+                  {/* CLINICAL ANALYSIS AREA */}
                   {selectedMessage && (
-                    <div className="flex-shrink-0 border-b border-slate-200 bg-white px-6 py-3">
-                      {selectedMessage.matched_rubrics?.length > 0 ? (
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-purple-50 to-teal-50 px-4 py-3 rounded-xl border border-teal-100">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
-                              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                                Clinical Rubrics
-                              </span>
-                              <span className="text-[10px] bg-teal-100 text-teal-700 font-bold px-2 py-0.5 rounded-full">
-                                {selectedMessage.matched_rubrics.length}
-                              </span>
+                    <div className="flex-shrink-0 border-b border-slate-200 bg-white px-6 py-4 overflow-y-auto max-h-[500px]">
+                      {repertoryResult ? (
+                        <div className="space-y-6 fade-in">
+                          {/* Analysis Header */}
+                          <div className="flex items-center justify-between bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              <span className="text-xs font-black text-emerald-800 uppercase tracking-widest">Clinical Analysis Complete</span>
                             </div>
-                            <div className="flex flex-col gap-2 w-full mt-2">
-                              {selectedMessage.matched_rubrics.slice(0, 3).map((rubric) => (
-                                <div
-                                  key={rubric.id}
-                                  className="bg-white border border-teal-100 rounded-lg p-2 shadow-sm"
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-bold text-slate-800">{rubric.name}</span>
-                                    <span className="text-[9px] text-slate-400 max-w-[200px] truncate" title={rubric.full_path}>{rubric.full_path}</span>
-                                  </div>
-                                  {rubric.medicines && rubric.medicines.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                      {rubric.medicines.map((med, idx) => (
-                                        <span key={idx} className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-md">
-                                          <span className="font-medium">{med.name}</span>
-                                          <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm ${med.grade >= 4 ? 'bg-rose-500' : med.grade === 3 ? 'bg-amber-500' : 'bg-teal-500'}`}>
-                                            {med.grade}
-                                          </span>
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                              {selectedMessage.matched_rubrics.length > 3 && (
-                                <div className="text-[10px] font-bold text-slate-400 mt-1 pl-1">
-                                  +{selectedMessage.matched_rubrics.length - 3} more rubrics hidden
-                                </div>
-                              )}
+                            <div className="flex items-center gap-3">
+                              <button 
+                                onClick={() => setRepertoryResult(null)}
+                                className="text-[10px] font-bold text-emerald-700 hover:underline"
+                              >
+                                Re-analyze with different chapter
+                              </button>
+                              <Link
+                                href={`/repertorize?rubrics=${repertoryResult.top_rubrics.map(r => r.id).join(",")}`}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-md text-[10px] font-black hover:bg-emerald-700 transition-all"
+                              >
+                                <TrendingUp className="w-3 h-3" />
+                                FULL CHART
+                              </Link>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <button
-                              onClick={handleAnalyzeSymptoms}
-                              disabled={analyzing}
-                              className="text-[10px] font-bold text-slate-400 hover:text-teal-600 transition-colors"
-                            >
-                              {analyzing ? "Scanning..." : "↺ Rescan"}
-                            </button>
-                            <Link
-                              href={`/repertorize?rubrics=${selectedMessage.matched_rubrics.map((r) => r.id).join(",")}`}
-                              className="flex items-center gap-1.5 px-4 py-2 bg-[#3F856C] text-white rounded-lg text-[11px] font-black hover:bg-[#35735E] hover:shadow-md transition-all active:scale-95 whitespace-nowrap"
-                            >
-                              <TrendingUp className="w-3.5 h-3.5" />
-                              OPEN REPERTORY CHART
-                            </Link>
+
+                          {/* ─── REPERTORIZATION TABLE ─── */}
+                          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                              <Table2 className="w-3.5 h-3.5 text-slate-500" />
+                              <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Symptom Mapping Table</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse">
+                                <thead>
+                                  <tr className="bg-slate-50/50">
+                                    <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">Symptom</th>
+                                    <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">Clinical Rubrics</th>
+                                    <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">Top Remedies</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {repertoryResult.symptoms_breakdown.map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
+                                      <td className="px-4 py-3 align-top">
+                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-sky-50 border border-sky-100 text-sky-700 text-[10px] font-bold rounded-md">
+                                          <Tag className="w-3 h-3" />
+                                          {row.symptom}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 align-top">
+                                        <div className="flex flex-col gap-1.5">
+                                          {row.rubrics.map(rb => (
+                                            <div key={rb.id} className="group relative">
+                                              <div className="flex items-start gap-1.5 p-1.5 bg-slate-50 border border-slate-100 rounded-md">
+                                                <FlaskConical className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                                                <div>
+                                                  <p className="text-[10px] font-bold text-slate-700 leading-tight">{rb.name}</p>
+                                                  <p className="text-[8px] text-slate-400 mt-0.5 truncate max-w-[150px]">{rb.full_path}</p>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 align-top">
+                                        <div className="flex flex-wrap gap-1">
+                                          {/* Flatten and deduplicate medicines for this symptom */}
+                                          {Array.from(new Set(row.rubrics.flatMap(r => r.medicines.map(m => JSON.stringify(m)))))
+                                            .map(mStr => JSON.parse(mStr))
+                                            .sort((a,b) => b.grade - a.grade)
+                                            .slice(0, 6)
+                                            .map((med, mi) => (
+                                              <span key={mi} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${GRADE_COLORS[med.grade] || "bg-slate-100"}`}>
+                                                {med.name}
+                                                <span className="opacity-60">G{med.grade}</span>
+                                              </span>
+                                            ))}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* ─── BOTTOM GRIDS: Top Rubrics & Medicine Chart ─── */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Top 3 Rubrics Summary */}
+                            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                              <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                                <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Top Matched Rubrics</h3>
+                              </div>
+                              <div className="p-3 space-y-3">
+                                {repertoryResult.top_rubrics.map((rb, i) => (
+                                  <div key={rb.id} className="flex items-start gap-3 p-2 bg-slate-50/50 rounded-lg">
+                                    <span className="text-xs font-black text-slate-300">#{i+1}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[11px] font-bold text-slate-800 leading-tight">{rb.name}</p>
+                                      <p className="text-[9px] text-slate-400 mt-0.5 truncate">{rb.full_path}</p>
+                                      <div className="flex flex-wrap gap-1 mt-2">
+                                        {rb.medicines.slice(0, 4).map((med, mi) => (
+                                          <span key={mi} className={`px-1 py-0.5 rounded text-[8px] font-bold ${GRADE_COLORS[med.grade]}`}>
+                                            {med.name}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Medicine Chart */}
+                            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                              <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                                <BarChart3 className="w-3.5 h-3.5 text-violet-500" />
+                                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Remedy Indicator Chart</h3>
+                              </div>
+                              <div className="p-3 space-y-2">
+                                {repertoryResult.medicine_chart.slice(0, 5).map((med, i) => {
+                                  const maxScore = repertoryResult.medicine_chart[0].score;
+                                  const pct = (med.score / maxScore) * 100;
+                                  return (
+                                    <div key={i} className="space-y-1">
+                                      <div className="flex justify-between text-[9px] font-bold">
+                                        <span className="text-slate-700">{med.name}</span>
+                                        <span className="text-slate-400">{med.occurrences} matches</span>
+                                      </div>
+                                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                        <div 
+                                          className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full transition-all duration-1000"
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 text-slate-400">
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span className="text-[11px] font-medium italic">No clinical rubrics extracted yet.</span>
+                        <div className="flex flex-col gap-4">
+                          {/* Analysis Initial State / Chapter Selection */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-teal-600" />
+                              <h3 className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Intelligent Clinical Analysis</h3>
+                            </div>
+                            <div className="text-[10px] text-slate-400 italic">Extract clinical rubrics from patient symptoms</div>
                           </div>
-                          <button
-                            onClick={handleAnalyzeSymptoms}
-                            disabled={analyzing}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 hover:border-teal-500 hover:text-teal-600 transition-all shadow-sm disabled:opacity-50"
-                          >
-                            {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                            ANALYZE NOW
-                          </button>
+
+                          <div className="flex flex-col sm:flex-row items-end gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <div className="flex-1 w-full space-y-2">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Optional: Select Body Chapter</label>
+                              <div className="relative">
+                                <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                                <select 
+                                  value={selectedChapterId || ""} 
+                                  onChange={(e) => setSelectedChapterId(e.target.value)}
+                                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all appearance-none"
+                                >
+                                  <option value="">All Chapters (Full Repertory Search)</option>
+                                  {chapters.map(ch => (
+                                    <option key={ch.id} value={ch.id}>{ch.name}</option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                              </div>
+                            </div>
+                            
+                            <button
+                              onClick={() => handleAnalyzeSymptoms(selectedChapterId)}
+                              disabled={analyzing}
+                              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-[#3F856C] text-white rounded-lg text-[11px] font-black hover:bg-[#35735E] shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                            >
+                              {analyzing ? (
+                                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing...</>
+                              ) : (
+                                <><Sparkles className="w-3.5 h-3.5" /> Start Analysis</>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
