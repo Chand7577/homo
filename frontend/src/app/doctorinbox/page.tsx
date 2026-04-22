@@ -1109,7 +1109,7 @@ const DoctorInbox = () => {
                                         setSelectedChapterId(newId);
                                         handleAnalyzeSymptoms(newId);
                                       }}
-                                      className="w-full pl-8 pr-6 py-1.5 bg-white border border-emerald-200 rounded-lg text-[10px] font-bold text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer"
+                                      className="w-full pl-8 pr-6 py-1.5 bg-white border border-emerald-200 rounded-lg text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 appearance-none cursor-pointer shadow-sm"
                                     >
                                       <option value="">All Chapters</option>
                                       {chapters.map(ch => (
