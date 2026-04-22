@@ -489,27 +489,27 @@ const DoctorInbox = () => {
         }
         
         .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
+          width: 8px;
         }
         
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: #f8fafc;
+          background: #f1f5f9;
           border-radius: 10px;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
+          background: #94a3b8;
           border-radius: 10px;
-          border: 1px solid #f8fafc;
+          border: 2px solid #f1f5f9;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
+          background: #64748b;
         }
 
         .custom-scrollbar {
           scrollbar-width: thin;
-          scrollbar-color: #cbd5e1 #f8fafc;
+          scrollbar-color: #94a3b8 #f1f5f9;
         }
 
         @keyframes slideIn {
@@ -1084,7 +1084,7 @@ const DoctorInbox = () => {
                       </div>
 
                       {isAnalysisExpanded && (
-                        <div className="px-6 pb-6 overflow-y-auto max-h-[70vh] custom-scrollbar animate-slide-in">
+                        <div className="px-6 pb-6 overflow-y-auto max-h-[45vh] custom-scrollbar animate-slide-in">
                           {/* Unified Analysis Header & Chapter Selection */}
                           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 shadow-sm">
                             <div className="flex items-center gap-3">
