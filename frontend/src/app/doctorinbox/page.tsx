@@ -92,7 +92,6 @@ const DoctorInbox = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false);
 
   // Fetch inbox messages
   const fetchInbox = async (page = 1, showSpinner = true) => {
