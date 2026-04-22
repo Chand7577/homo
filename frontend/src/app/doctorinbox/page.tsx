@@ -808,7 +808,7 @@ const DoctorInbox = () => {
             </div>
 
             {/* Message Detail / Thread */}
-            <div className={`lg:col-span-7 xl:col-span-8 bg-slate-50 flex flex-col ${!mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
+            <div className={`lg:col-span-7 xl:col-span-8 bg-slate-50 flex flex-col h-full min-h-0 ${!mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
               {selectedMessage ? (
                 <>
                   {/* Compact Thread Header */}
@@ -1084,7 +1084,7 @@ const DoctorInbox = () => {
                       </div>
 
                       {isAnalysisExpanded && (
-                        <div className="px-6 pb-6 overflow-y-auto max-h-[500px] custom-scrollbar animate-slide-in">
+                        <div className="px-6 pb-6 overflow-y-auto max-h-[500px] animate-slide-in">
                           {repertoryResult ? (
                             <div className="space-y-6">
                               <div className="flex items-center justify-between bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100">
@@ -1115,7 +1115,7 @@ const DoctorInbox = () => {
                                   <Table2 className="w-3.5 h-3.5 text-slate-500" />
                                   <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Symptom Mapping Table</h3>
                                 </div>
-                                <div className="overflow-x-auto custom-scrollbar">
+                                <div className="overflow-x-auto">
                                   <table className="w-full text-left border-collapse relative">
                                     <thead className="sticky top-0 z-10 bg-slate-50">
                                       <tr className="bg-slate-50/50">
@@ -1260,7 +1260,7 @@ const DoctorInbox = () => {
                   {/* Message Thread Area */}
                   <div 
                     ref={chatContainerRef}
-                    className="flex-1 min-h-0 overflow-y-scroll custom-scrollbar px-6 py-6 overscroll-contain"
+                    className="flex-1 min-h-0 overflow-y-auto px-6 py-6"
                   >
                     {threadLoading ? (
                       <div className="flex items-center justify-center py-20">
