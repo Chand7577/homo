@@ -1603,8 +1603,19 @@ def patient_verify_otp(request):
 
 
 
+def require_admin_or_doctor(view_func):
+    """Decorator to check if user is admin or doctor"""
+    def wrapper(request, *args, **kwargs):
+        is_admin = request.session.get('is_admin')
+        is_doctor = request.user.is_authenticated and request.user.user_type == 'doctor'
+        if not (is_admin or is_doctor):
+            return JsonResponse({'error': 'Unauthorized. Access required.'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 @csrf_exempt
-@require_admin
+@require_admin_or_doctor
 def create_rubric(request):
     """Create a new rubric"""
     if request.method != "POST":

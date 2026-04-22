@@ -1084,7 +1084,7 @@ const DoctorInbox = () => {
                       </div>
 
                       {isAnalysisExpanded && (
-                        <div className="px-6 pb-6 overflow-y-auto max-h-[70vh] animate-slide-in">
+                        <div className="px-6 pb-6 overflow-y-auto max-h-[70vh] custom-scrollbar animate-slide-in">
                           {/* Unified Analysis Header & Chapter Selection */}
                           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 shadow-sm">
                             <div className="flex items-center gap-3">
@@ -1141,7 +1141,7 @@ const DoctorInbox = () => {
                                   <Table2 className="w-3.5 h-3.5 text-slate-500" />
                                   <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Symptom Mapping Table</h3>
                                 </div>
-                                <div className="overflow-x-auto">
+                                <div className="overflow-x-auto custom-scrollbar">
                                   <table className="w-full text-left border-collapse relative">
                                     <thead className="sticky top-0 z-10 bg-slate-50">
                                       <tr className="bg-slate-50/50">
@@ -1258,7 +1258,7 @@ const DoctorInbox = () => {
                   {/* Message Thread Area */}
                   <div 
                     ref={chatContainerRef}
-                    className="flex-1 min-h-0 overflow-y-auto px-6 py-6"
+                    className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 py-6"
                   >
                     {threadLoading ? (
                       <div className="flex items-center justify-center py-20">

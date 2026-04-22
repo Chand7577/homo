@@ -6,8 +6,10 @@ import {
   BookOpen, Search, Plus, X, Pill, Sparkles, ChevronRight,
   ChevronDown, Tag, Loader2, BarChart3, Trophy, AlertCircle,
   CheckCircle2, ArrowLeft, Zap, Filter, Star, Activity,
-  Hash, Info, Table2, FlaskConical, Microscope, Mic, MicOff
+  Hash, Info, Table2, FlaskConical, Microscope, Mic, MicOff,
+  PlusCircle
 } from "lucide-react";
+import RubricModal from "../../components/RubricModal";
 
 const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
@@ -66,6 +68,10 @@ export default function RubricsPage() {
   const [expandedRubricCell, setExpandedRubricCell] = useState<string | null>(null); // "rowIdx-rubricIdx"
   const [isListening, setIsListening] = useState(false);
   const [dictationLang, setDictationLang] = useState<"en-IN" | "hi-IN">("en-IN");
+  
+  // Rubric Modal state
+  const [isRubricModalOpen, setIsRubricModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   
   // Setup SpeechRecognition hook
   const recognitionRef = useRef<any>(null);
@@ -249,6 +255,15 @@ export default function RubricsPage() {
               </button>
             </div>
           )}
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsRubricModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-700 transition-all active:scale-95 shadow-sm"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              ADD RUBRIC
+            </button>
+          </div>
         </div>
       </header>
 
@@ -740,6 +755,28 @@ export default function RubricsPage() {
           </div>
         )}
       </div>
+      {/* Rubric Management Modal */}
+      <RubricModal
+        isOpen={isRubricModalOpen}
+        onClose={() => setIsRubricModalOpen(false)}
+        onSuccess={() => {
+          setSuccessMessage("Rubric added successfully!");
+          // Refresh chapters if needed
+          fetch(`${API_BASE}/doctor/rubrics/chapters/`, { credentials: "include" })
+            .then(r => r.json())
+            .then(d => { if (d.success) setChapters(d.chapters || []); });
+          setTimeout(() => setSuccessMessage(""), 3000);
+        }}
+      />
+
+      {successMessage && (
+        <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
+          <div className="bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-3 font-bold text-sm">
+            <CheckCircle2 className="w-5 h-5" />
+            {successMessage}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
