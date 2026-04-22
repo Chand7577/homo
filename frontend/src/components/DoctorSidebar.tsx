@@ -23,7 +23,7 @@ const menuItems = [
   { label: "Home", path: "/", icon: Home },
   { label: "Inbox", path: "/doctorinbox", icon: Inbox, showBadge: true },
   { label: "New Case", path: "/cases", icon: FilePlus },
-  { label: "Repertorization", path: "/repertorize", icon: ListChecks },
+  // { label: "Repertorization", path: "/repertorize", icon: ListChecks },
   { label: "Rubrics", path: "/rubrics", icon: ClipboardList },
   { label: "Medicines", path: "/medicines", icon: Pill },
   { label: "Profile", path: "/doctorprofile", icon: User },
