@@ -110,6 +110,15 @@ DATABASES = {
     )
 }
 
+# If running locally (not on Render) and in DEBUG mode, ensure we use the local DB
+# even if DATABASE_URL is set in .env (which often contains Render production URLs)
+if not os.environ.get('RENDER') and DEBUG:
+    host = DATABASES['default'].get('HOST', '')
+    # Check if host looks like a Render internal hostname
+    if host and ('-a' in host or 'render.com' in host):
+        DATABASES['default'] = dj_database_url.parse('postgresql://postgres:1234@127.0.0.1:5432/homo')
+        DATABASES['default']['CONN_MAX_AGE'] = 600
+
 
 
 

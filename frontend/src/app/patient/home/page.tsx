@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   MapPin,
@@ -31,6 +31,8 @@ import {
   CheckCircle2,
   Send,
   Inbox,
+  Mic,
+  MicOff,
 } from "lucide-react";
 
 const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
@@ -171,12 +173,67 @@ const PatientHome = () => {
   const [messages, setMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Speech Recognition state
+  const [isListening, setIsListening] = useState(false);
+  const [dictationLang, setDictationLang] = useState<"en-IN" | "hi-IN">("en-IN");
+  const recognitionRef = useRef<any>(null);
+  const problemDescRef = useRef<HTMLTextAreaElement>(null);
+
   // Fetch doctors when city or specialty changes
   useEffect(() => {
     if (currentStep === 2 && selectedCity) {
       fetchDoctors();
     }
   }, [currentStep, selectedCity]);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+
+        recognitionRef.current.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setProblemDescription((prev) =>
+            prev ? prev + " " + transcript : transcript,
+          );
+          setIsListening(false);
+        };
+
+        recognitionRef.current.onerror = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+        };
+      }
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert("Voice recognition is not supported in this browser. Try Chrome.");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.lang = dictationLang;
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
 
   const fetchDoctors = async () => {
     setLoading(true);
@@ -650,10 +707,46 @@ Please confirm availability.
 
               {/* Optional Problem Description */}
               <div className="mb-6">
-                <label className="block text-sm font-bold text-gray-700 mb-3">
-                  Additional Details (Optional)
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-bold text-gray-700">
+                    Additional Details (Optional)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setDictationLang((p) =>
+                          p === "hi-IN" ? "en-IN" : "hi-IN",
+                        )
+                      }
+                      className="text-[10px] font-black text-gray-500 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-md transition-colors"
+                      title="Toggle dictation language (English/Hindi)"
+                    >
+                      {dictationLang === "hi-IN" ? "HI" : "EN"}
+                    </button>
+                    <div className="relative flex items-center justify-center">
+                      {isListening && (
+                        <div className="absolute w-8 h-8 rounded-full bg-red-400 animate-ping pointer-events-none" />
+                      )}
+                      <button
+                        onClick={toggleListening}
+                        className={`relative flex items-center justify-center w-8 h-8 rounded-full transition-colors z-10 ${
+                          isListening
+                            ? "bg-red-500 text-white shadow-md hover:bg-red-600"
+                            : "bg-gray-100 text-gray-500 hover:bg-[#3F856C]/10 hover:text-[#3F856C]"
+                        }`}
+                        title="Voice dictation"
+                      >
+                        {isListening ? (
+                          <Mic className="w-4 h-4" />
+                        ) : (
+                          <MicOff className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 <textarea
+                  ref={problemDescRef}
                   value={problemDescription}
                   onChange={(e) => setProblemDescription(e.target.value)}
                   placeholder="Describe your symptoms or concerns in detail..."

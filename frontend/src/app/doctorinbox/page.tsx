@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import {
   Inbox,
   Send,
@@ -31,6 +32,8 @@ import {
   Circle,
   Check,
   ChevronUp,
+  TrendingUp,
+  Sparkles,
 } from "lucide-react";
 
 const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
@@ -55,7 +58,9 @@ const DoctorInbox = () => {
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = (behavior = "auto") => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   };
 
   // Scroll to bottom only on initial load or thread change
@@ -74,6 +79,7 @@ const DoctorInbox = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
 
   // Fetch inbox messages
   const fetchInbox = async (page = 1, showSpinner = true) => {
@@ -292,11 +298,50 @@ const DoctorInbox = () => {
       setShowStatusMenu(false);
 
       await fetchMessageThread(selectedMessage.id);
-    } catch (err) {
-      alert("Failed to update status. Please try again.");
-      console.error("Error updating status:", err);
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const handleAnalyzeSymptoms = async () => {
+   
+    if (!selectedMessage) return;
+    const text = selectedMessage.problem_description || selectedMessage.message;
+    if (!text) return;
+
+    setAnalyzing(true);
+    try {
+      const response = await fetch(
+        `${API_BASE}/doctor/rubrics/search/?query=${encodeURIComponent(text.substring(0, 500))}`,
+        {
+          method: "GET",
+          credentials: "include",
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+
+        console.log(data);
+        if (data.success && data.rubrics) {
+          setSelectedMessage((prev) => ({
+            ...prev,
+            matched_rubrics: data.rubrics,
+          }));
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === selectedMessage.id
+                ? { ...m, matched_rubrics: data.rubrics }
+                : m,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      console.error("Analysis failed:", e);
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -667,6 +712,16 @@ const DoctorInbox = () => {
                                   </span>
                                 </div>
 
+                                {message.matched_rubrics?.length > 0 && (
+                                  <div 
+                                    className="inline-flex items-center gap-1 text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md"
+                                    title="Automatic clinical rubrics available"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span className="text-[10px] font-bold">SYMPTOMS</span>
+                                  </div>
+                                )}
+
                                 {message.reply_count > 0 && (
                                   <div className="inline-flex items-center gap-1 text-slate-500">
                                     <MessageCircle className="w-3.5 h-3.5" />
@@ -858,10 +913,10 @@ const DoctorInbox = () => {
                       </div>
                     </div>
 
-                    {/* Collapsible Patient Info Panel */}
+
                     {showPatientInfo && (
                       <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-teal-50 border-t border-slate-200 animate-slide-in">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                           {/* Key info in compact cards */}
                           {selectedMessage.sub_specialty && (
                             <div className="p-3 bg-white rounded-lg flex items-center gap-2">
@@ -916,9 +971,136 @@ const DoctorInbox = () => {
                             </div>
                           )}
                         </div>
+
+                        {/* Matched Rubrics Section */}
+                        {selectedMessage.matched_rubrics?.length > 0 && (
+                          <div className="bg-white/60 p-4 rounded-xl border border-teal-100">
+                            <div className="flex items-center gap-2 mb-3">
+                              <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                Patient-Submitted Rubrics (Extracted)
+                              </h3>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedMessage.matched_rubrics.map((rubric) => (
+                                <div
+                                  key={rubric.id}
+                                  className="group relative px-3 py-1.5 bg-white border border-teal-100 rounded-lg shadow-sm hover:border-teal-300 transition-all cursor-default"
+                                >
+                                  <span className="text-xs font-medium text-slate-700">
+                                    {rubric.name}
+                                  </span>
+                                  {/* Tooltip for full path */}
+                                  <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-30">
+                                    <div className="bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap shadow-xl">
+                                      {rubric.full_path}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="mt-4 text-[10px] text-slate-500 italic">
+                                * These rubrics were automatically suggested based on the patient's description.
+                              </p>
+                          </div>
+                        )}
+                        
+                        {/* Problem Description if not visible elsewhere */}
+                        {selectedMessage.problem_description && (
+                          <div className="mt-4 p-4 bg-white/40 rounded-xl border border-slate-100">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                              Detailed Symptom Description
+                            </h3>
+                            <p className="text-sm text-slate-700 leading-relaxed italic">
+                              "{selectedMessage.problem_description}"
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
+
+                  {/* CLINICAL ANALYSIS STRIP — fixed between header and thread */}
+                  {selectedMessage && (
+                    <div className="flex-shrink-0 border-b border-slate-200 bg-white px-6 py-3">
+                      {selectedMessage.matched_rubrics?.length > 0 ? (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-purple-50 to-teal-50 px-4 py-3 rounded-xl border border-teal-100">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
+                              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                                Clinical Rubrics
+                              </span>
+                              <span className="text-[10px] bg-teal-100 text-teal-700 font-bold px-2 py-0.5 rounded-full">
+                                {selectedMessage.matched_rubrics.length}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-2 w-full mt-2">
+                              {selectedMessage.matched_rubrics.slice(0, 3).map((rubric) => (
+                                <div
+                                  key={rubric.id}
+                                  className="bg-white border border-teal-100 rounded-lg p-2 shadow-sm"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold text-slate-800">{rubric.name}</span>
+                                    <span className="text-[9px] text-slate-400 max-w-[200px] truncate" title={rubric.full_path}>{rubric.full_path}</span>
+                                  </div>
+                                  {rubric.medicines && rubric.medicines.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                      {rubric.medicines.map((med, idx) => (
+                                        <span key={idx} className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-md">
+                                          <span className="font-medium">{med.name}</span>
+                                          <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm ${med.grade >= 4 ? 'bg-rose-500' : med.grade === 3 ? 'bg-amber-500' : 'bg-teal-500'}`}>
+                                            {med.grade}
+                                          </span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              {selectedMessage.matched_rubrics.length > 3 && (
+                                <div className="text-[10px] font-bold text-slate-400 mt-1 pl-1">
+                                  +{selectedMessage.matched_rubrics.length - 3} more rubrics hidden
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              onClick={handleAnalyzeSymptoms}
+                              disabled={analyzing}
+                              className="text-[10px] font-bold text-slate-400 hover:text-teal-600 transition-colors"
+                            >
+                              {analyzing ? "Scanning..." : "↺ Rescan"}
+                            </button>
+                            <Link
+                              href={`/repertorize?rubrics=${selectedMessage.matched_rubrics.map((r) => r.id).join(",")}`}
+                              className="flex items-center gap-1.5 px-4 py-2 bg-[#3F856C] text-white rounded-lg text-[11px] font-black hover:bg-[#35735E] hover:shadow-md transition-all active:scale-95 whitespace-nowrap"
+                            >
+                              <TrendingUp className="w-3.5 h-3.5" />
+                              OPEN REPERTORY CHART
+                            </Link>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span className="text-[11px] font-medium italic">No clinical rubrics extracted yet.</span>
+                          </div>
+                          <button
+                            onClick={handleAnalyzeSymptoms}
+                            disabled={analyzing}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 hover:border-teal-500 hover:text-teal-600 transition-all shadow-sm disabled:opacity-50"
+                          >
+                            {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                            ANALYZE NOW
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Message Thread Area */}
                   <div 

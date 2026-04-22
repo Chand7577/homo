@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   Plus,
@@ -107,6 +108,46 @@ const DoctorRepertorize = () => {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Load rubrics from URL query params
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const rubricsParam = searchParams.get("rubrics");
+    if (rubricsParam && selectedRubrics.length === 0) {
+      const ids = rubricsParam.split(",");
+      const fetchInitialRubrics = async () => {
+        try {
+          const loadedRubrics = [];
+          for (const id of ids) {
+            const resp = await fetch(`${API_BASE}/doctor/rubrics/${id}/`, {
+              credentials: "include",
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.success && data.rubric) {
+                loadedRubrics.push({
+                  rubric: data.rubric,
+                  intensity: 3,
+                  notes: "Extracted from patient symptoms",
+                });
+              }
+            }
+          }
+          if (loadedRubrics.length > 0) {
+            setSelectedRubrics(loadedRubrics);
+            // Trigger repertorization after a short delay to ensure state is updated
+            // and the UI is ready
+            setTimeout(() => {
+                performRepertorization();
+            }, 500);
+          }
+        } catch (e) {
+          console.error("Error loading rubrics from URL:", e);
+        }
+      };
+      fetchInitialRubrics();
+    }
+  }, [searchParams]);
 
   const searchRubrics = async () => {
     if (searchQuery.trim().length < 2) return;

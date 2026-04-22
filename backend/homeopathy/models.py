@@ -747,6 +747,9 @@ class Message(models.Model):
     sub_specialty = models.CharField(max_length=200, blank=True)
     problem_description = models.TextField(blank=True)
     
+    # NEW: Rubrics extracted from problem_description
+    matched_rubrics = models.ManyToManyField(Rubric, related_name='messages', blank=True)
+    
     # Reply chain
     parent_message = models.ForeignKey(
         'self', 
