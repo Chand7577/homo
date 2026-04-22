@@ -1084,28 +1084,41 @@ const DoctorInbox = () => {
                       </div>
 
                       {isAnalysisExpanded && (
-                        <div className="px-6 pb-6 overflow-y-auto max-h-[500px] animate-slide-in">
+                        <div className="px-6 pb-6 overflow-y-auto max-h-[70vh] animate-slide-in">
                           {repertoryResult ? (
                             <div className="space-y-6">
-                              <div className="flex items-center justify-between bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100">
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                  <span className="text-xs font-black text-emerald-800 uppercase tracking-widest">Analysis Results</span>
-                                </div>
+                              {/* Analysis Header with Integrated Chapter Selection */}
+                              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 shadow-sm">
                                 <div className="flex items-center gap-3">
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); setRepertoryResult(null); }}
-                                    className="text-[10px] font-bold text-emerald-700 hover:underline"
-                                  >
-                                    Reset
-                                  </button>
-                                  <Link
-                                    href={`/repertorize?rubrics=${repertoryResult.top_rubrics.map(r => r.id).join(",")}`}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-md text-[10px] font-black hover:bg-emerald-700 transition-all"
-                                  >
-                                    <TrendingUp className="w-3 h-3" />
-                                    FULL CHART
-                                  </Link>
+                                  <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-md shadow-emerald-600/20">
+                                    <CheckCircle2 className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest block">Analysis Active</span>
+                                    <span className="text-[11px] font-bold text-emerald-600">{repertoryResult.total_matched} rubrics identified</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 flex-1 justify-end w-full sm:w-auto">
+                                  <div className="relative flex-1 max-w-[200px]">
+                                    <BookOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-600" />
+                                    <select 
+                                      value={selectedChapterId || ""} 
+                                      onChange={(e) => {
+                                        const newId = e.target.value;
+                                        setSelectedChapterId(newId);
+                                        handleAnalyzeSymptoms(newId);
+                                      }}
+                                      className="w-full pl-8 pr-6 py-1.5 bg-white border border-emerald-200 rounded-lg text-[10px] font-bold text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer"
+                                    >
+                                      <option value="">All Chapters</option>
+                                      {chapters.map(ch => (
+                                        <option key={ch.id} value={ch.id}>{ch.name}</option>
+                                      ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-400 pointer-events-none" />
+                                  </div>
+                                  
                                 </div>
                               </div>
 
