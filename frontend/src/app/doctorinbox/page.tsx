@@ -1084,7 +1084,7 @@ const DoctorInbox = () => {
                       </div>
 
                       {isAnalysisExpanded && (
-                        <div className="px-6 pb-6 overflow-y-auto max-h-[450px] animate-slide-in">
+                        <div className="px-6 pb-6 overflow-y-auto max-h-[500px] custom-scrollbar animate-slide-in">
                           {repertoryResult ? (
                             <div className="space-y-6">
                               <div className="flex items-center justify-between bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100">
@@ -1115,9 +1115,9 @@ const DoctorInbox = () => {
                                   <Table2 className="w-3.5 h-3.5 text-slate-500" />
                                   <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Symptom Mapping Table</h3>
                                 </div>
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-left border-collapse">
-                                    <thead>
+                                <div className="overflow-x-auto custom-scrollbar">
+                                  <table className="w-full text-left border-collapse relative">
+                                    <thead className="sticky top-0 z-10 bg-slate-50">
                                       <tr className="bg-slate-50/50">
                                         <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">Symptom</th>
                                         <th className="px-4 py-2 text-[9px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">Clinical Rubrics</th>
