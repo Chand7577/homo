@@ -489,8 +489,8 @@ const DoctorInbox = () => {
         }
         
         .custom-scrollbar::-webkit-scrollbar {
-          width: 12px;
-          display: block !important;
+          width: 8px;
+          height: 8px;
         }
         
         .custom-scrollbar::-webkit-scrollbar-track {
@@ -653,7 +653,7 @@ const DoctorInbox = () => {
               </div>
 
               {/* Messages List Area */}
-              <div className="flex-1 min-h-0 overflow-y-scroll custom-scrollbar">
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                 {loading ? (
                   <div className="flex items-center justify-center py-20">
                     <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
@@ -1084,7 +1084,7 @@ const DoctorInbox = () => {
                       </div>
 
                       {isAnalysisExpanded && (
-                        <div className="px-6 pb-6 overflow-y-scroll max-h-[45vh] custom-scrollbar animate-slide-in">
+                        <div className="px-6 pb-6 overflow-y-auto max-h-[45vh] custom-scrollbar animate-slide-in">
                           {/* Unified Analysis Header & Chapter Selection */}
                           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 shadow-sm">
                             <div className="flex items-center gap-3">
@@ -1258,7 +1258,7 @@ const DoctorInbox = () => {
                   {/* Message Thread Area */}
                   <div 
                     ref={chatContainerRef}
-                    className="flex-1 min-h-0 overflow-y-scroll custom-scrollbar px-6 py-6"
+                    className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 py-6"
                   >
                     {threadLoading ? (
                       <div className="flex items-center justify-center py-20">
