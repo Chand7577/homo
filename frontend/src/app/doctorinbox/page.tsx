@@ -489,27 +489,27 @@ const DoctorInbox = () => {
         }
         
         .custom-scrollbar::-webkit-scrollbar {
-          width: 12px;
+          width: 6px;
         }
         
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: #e2e8f0;
-          border-radius: 4px;
+          background: #f8fafc;
+          border-radius: 10px;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #475569;
-          border-radius: 4px;
-          border: 2px solid #e2e8f0;
+          background: #cbd5e1;
+          border-radius: 10px;
+          border: 1px solid #f8fafc;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #1e293b;
+          background: #94a3b8;
         }
 
         .custom-scrollbar {
-          scrollbar-width: auto;
-          scrollbar-color: #475569 #e2e8f0;
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 #f8fafc;
         }
 
         @keyframes slideIn {
