@@ -69,6 +69,7 @@ const DoctorInbox = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [replyText, setReplyText] = useState("");
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [isAnalysisExpanded, setIsAnalysisExpanded] = useState(true);
   const [chapters, setChapters] = useState([]);
   const [selectedChapterId, setSelectedChapterId] = useState(null);
   const [repertoryResult, setRepertoryResult] = useState(null);
@@ -82,12 +83,12 @@ const DoctorInbox = () => {
     }
   };
 
-  // Scroll to bottom only on initial load or thread change
+  // Scroll to bottom only on initial load, thread change, or analysis update
   useEffect(() => {
     if (messageThread.length > 0 && !threadLoading) {
-      scrollToBottom();
+      setTimeout(() => scrollToBottom(), 100);
     }
-  }, [selectedMessage?.id, threadLoading]);
+  }, [selectedMessage?.id, threadLoading, repertoryResult, isAnalysisExpanded]);
 
   // UI State
   const [showSearch, setShowSearch] = useState(false);
@@ -1060,31 +1061,54 @@ const DoctorInbox = () => {
 
                   {/* CLINICAL ANALYSIS AREA */}
                   {selectedMessage && (
-                    <div className="flex-shrink-0 border-b border-slate-200 bg-white px-6 py-4 overflow-y-auto max-h-[500px]">
-                      {repertoryResult ? (
-                        <div className="space-y-6 fade-in">
-                          {/* Analysis Header */}
-                          <div className="flex items-center justify-between bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                              <span className="text-xs font-black text-emerald-800 uppercase tracking-widest">Clinical Analysis Complete</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <button 
-                                onClick={() => setRepertoryResult(null)}
-                                className="text-[10px] font-bold text-emerald-700 hover:underline"
-                              >
-                                Re-analyze with different chapter
-                              </button>
-                              <Link
-                                href={`/repertorize?rubrics=${repertoryResult.top_rubrics.map(r => r.id).join(",")}`}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-md text-[10px] font-black hover:bg-emerald-700 transition-all"
-                              >
-                                <TrendingUp className="w-3 h-3" />
-                                FULL CHART
-                              </Link>
-                            </div>
-                          </div>
+                    <div className="flex-shrink-0 border-b border-slate-200 bg-white">
+                      <div 
+                        className="px-6 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+                        onClick={() => setIsAnalysisExpanded(!isAnalysisExpanded)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-teal-600" />
+                          <h3 className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Intelligent Clinical Analysis</h3>
+                          {repertoryResult && (
+                            <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded-full uppercase">Complete</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {repertoryResult && (
+                            <span className="text-[10px] text-slate-400 mr-2">{repertoryResult.total_matched} rubrics found</span>
+                          )}
+                          <button className="p-1 hover:bg-slate-200 rounded-md transition-colors">
+                            {isAnalysisExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {isAnalysisExpanded && (
+                        <div className="px-6 pb-6 overflow-y-auto max-h-[450px] animate-slide-in">
+                          {repertoryResult ? (
+                            <div className="space-y-6">
+                              {/* Analysis Header */}
+                              <div className="flex items-center justify-between bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                  <span className="text-xs font-black text-emerald-800 uppercase tracking-widest">Analysis Results</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); setRepertoryResult(null); }}
+                                    className="text-[10px] font-bold text-emerald-700 hover:underline"
+                                  >
+                                    Reset
+                                  </button>
+                                  <Link
+                                    href={`/repertorize?rubrics=${repertoryResult.top_rubrics.map(r => r.id).join(",")}`}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-md text-[10px] font-black hover:bg-emerald-700 transition-all"
+                                  >
+                                    <TrendingUp className="w-3 h-3" />
+                                    FULL CHART
+                                  </Link>
+                                </div>
+                              </div>
 
                           {/* ─── REPERTORIZATION TABLE ─── */}
                           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -1246,6 +1270,7 @@ const DoctorInbox = () => {
                               )}
                             </button>
                           </div>
+                          )}
                         </div>
                       )}
                     </div>
