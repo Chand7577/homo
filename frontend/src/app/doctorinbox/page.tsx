@@ -489,27 +489,27 @@ const DoctorInbox = () => {
         }
         
         .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
+          width: 12px;
+          display: block !important;
         }
         
         .custom-scrollbar::-webkit-scrollbar-track {
           background: #f1f5f9;
-          border-radius: 10px;
+          border-left: 1px solid #e2e8f0;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #94a3b8;
-          border-radius: 10px;
+          background: #0d9488; /* teal-600 */
           border: 2px solid #f1f5f9;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #64748b;
+          background: #0f766e; /* teal-700 */
         }
 
         .custom-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: #94a3b8 #f1f5f9;
+          scrollbar-width: auto;
+          scrollbar-color: #0d9488 #f1f5f9;
         }
 
         @keyframes slideIn {
@@ -592,7 +592,7 @@ const DoctorInbox = () => {
         <div className="max-w-[1600px] mx-auto h-full">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 h-full">
             {/* Messages List */}
-            <div className={`lg:col-span-5 xl:col-span-4 bg-white border-r border-slate-200 flex flex-col ${mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
+            <div className={`lg:col-span-5 xl:col-span-4 bg-white border-r border-slate-200 flex flex-col h-full min-h-0 overflow-hidden ${mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
               {/* Search */}
               {showSearch && (
                 <div className="p-4 border-b border-slate-200 animate-slide-in">
@@ -653,7 +653,7 @@ const DoctorInbox = () => {
               </div>
 
               {/* Messages List Area */}
-              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+              <div className="flex-1 min-h-0 overflow-y-scroll custom-scrollbar">
                 {loading ? (
                   <div className="flex items-center justify-center py-20">
                     <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
@@ -808,7 +808,7 @@ const DoctorInbox = () => {
             </div>
 
             {/* Message Detail / Thread */}
-            <div className={`lg:col-span-7 xl:col-span-8 bg-slate-50 flex flex-col h-full min-h-0 ${!mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
+            <div className={`lg:col-span-7 xl:col-span-8 bg-slate-50 flex flex-col h-full min-h-0 overflow-hidden ${!mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
               {selectedMessage ? (
                 <>
                   {/* Compact Thread Header */}
@@ -1084,7 +1084,7 @@ const DoctorInbox = () => {
                       </div>
 
                       {isAnalysisExpanded && (
-                        <div className="px-6 pb-6 overflow-y-auto max-h-[45vh] custom-scrollbar animate-slide-in">
+                        <div className="px-6 pb-6 overflow-y-scroll max-h-[45vh] custom-scrollbar animate-slide-in">
                           {/* Unified Analysis Header & Chapter Selection */}
                           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 shadow-sm">
                             <div className="flex items-center gap-3">
@@ -1258,7 +1258,7 @@ const DoctorInbox = () => {
                   {/* Message Thread Area */}
                   <div 
                     ref={chatContainerRef}
-                    className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 py-6"
+                    className="flex-1 min-h-0 overflow-y-scroll custom-scrollbar px-6 py-6"
                   >
                     {threadLoading ? (
                       <div className="flex items-center justify-center py-20">
