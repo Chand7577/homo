@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { FaComments, FaPlay } from "react-icons/fa";
+import { usePathname } from "next/navigation";
 
 type Message = {
   from: "bot" | "user";
@@ -18,6 +19,8 @@ type Message = {
 };
 
 const HomeopathyChat: React.FC = () => {
+  const pathname = usePathname();
+  const isInboxPage = pathname === "/doctorinbox";
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { from: "bot", text: "👋 Hello Doctor! I'm your HomeoCase Assistant. How can I help you navigate the system today?" },
@@ -130,7 +133,8 @@ const HomeopathyChat: React.FC = () => {
 
   return (
     <>
-      {/* Floating Chat Button */}
+      {/* Floating Chat Button — hidden on doctor inbox to avoid overlapping reply button */}
+      {!isInboxPage && (
       <motion.button
         drag
         dragMomentum={false}
@@ -142,6 +146,7 @@ const HomeopathyChat: React.FC = () => {
       >
         <FaComments size={22} />
       </motion.button>
+      )}
 
       {/* Chat Modal */}
       <AnimatePresence>

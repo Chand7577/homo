@@ -763,7 +763,7 @@ const DoctorInbox = () => {
 
                                 {message.reply_count > 0 && (
                                   <div className="inline-flex items-center gap-1 text-slate-500">
-                                    <MessageCircle className="w-3.5 h-3.5" />
+                                    <MessageCircle className="w-3.5 h-3.5 " />
                                     <span className="text-xs font-medium">
                                       {message.reply_count}
                                     </span>
