@@ -808,7 +808,7 @@ const DoctorInbox = () => {
             </div>
 
             {/* Message Detail / Thread */}
-            <div className={`lg:col-span-7 xl:col-span-8 bg-slate-50 flex flex-col h-full min-h-0 overflow-hidden mb-16 md:mb-0 ${!mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
+            <div className={`lg:col-span-7 xl:col-span-8 bg-slate-50 flex flex-col h-full min-h-0 overflow-hidden ${!mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
               {selectedMessage ? (
                 <>
                   {/* Compact Thread Header */}
@@ -1369,19 +1369,16 @@ const DoctorInbox = () => {
                 </>
               ) : (
                 // Empty State
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center px-6">
-                    <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-teal-100 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-                      <MessageCircle className="w-12 h-12 text-teal-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">
-                      Select a Conversation
-                    </h3>
-                    <p className="text-slate-500 max-w-sm mx-auto">
-                      Choose a message from the list to view the conversation
-                      and respond to your patients
-                    </p>
+                <div className="flex flex-col items-center pt-24 px-6">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-teal-100 rounded-2xl flex items-center justify-center mb-4 shadow-md">
+                    <MessageCircle className="w-8 h-8 text-teal-600" />
                   </div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-1">
+                    Select a Conversation
+                  </h3>
+                  <p className="text-sm text-slate-500 max-w-xs text-center">
+                    Choose a message from the list on the left to view and reply
+                  </p>
                 </div>
               )}
             </div>
