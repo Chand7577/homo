@@ -34,6 +34,12 @@ import {
   ChevronUp,
   TrendingUp,
   Sparkles,
+  BookOpen,
+  FlaskConical,
+  Trophy,
+  Table2,
+  BarChart3,
+  Tag,
 } from "lucide-react";
 
 const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
