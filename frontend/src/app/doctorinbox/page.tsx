@@ -808,7 +808,7 @@ const DoctorInbox = () => {
             </div>
 
             {/* Message Detail / Thread */}
-            <div className={`lg:col-span-7 xl:col-span-8 bg-slate-50 flex flex-col h-full min-h-0 overflow-hidden ${!mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
+            <div className={`lg:col-span-7 xl:col-span-8 bg-slate-50 flex flex-col h-full min-h-0 overflow-hidden mb-16 md:mb-0 ${!mobileShowThread ? 'hidden lg:flex' : 'flex'}`}>
               {selectedMessage ? (
                 <>
                   {/* Compact Thread Header */}
@@ -1265,13 +1265,8 @@ const DoctorInbox = () => {
                         <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
                       </div>
                     ) : messageThread.length === 0 ? (
-                      <div className="text-center py-20">
-                        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                          <MessageCircle className="w-8 h-8 text-slate-400" />
-                        </div>
-                        <p className="text-slate-500 font-medium">
-                          No messages in this thread
-                        </p>
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-sm text-slate-400 font-medium">No messages yet. Send the first reply below.</p>
                       </div>
                     ) : (
                       <div className="space-y-4 max-w-4xl mx-auto">
@@ -1337,7 +1332,7 @@ const DoctorInbox = () => {
                   </div>
 
                   {/* Reply Input */}
-                  <div className="bg-white border-t border-slate-200 px-6 py-4">
+                  <div className="bg-white border-t border-slate-200 px-6 py-4 pb-safe md:pb-4" style={{paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)'}}>
                     <div className="flex items-end gap-3 max-w-4xl mx-auto">
                       <div className="flex-1">
                         <textarea
