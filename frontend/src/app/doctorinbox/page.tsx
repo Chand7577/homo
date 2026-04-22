@@ -1229,12 +1229,7 @@ const DoctorInbox = () => {
                             </div>
                           ) : (
                             <div className="flex flex-col gap-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Sparkles className="w-4 h-4 text-teal-600" />
-                                  <h3 className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Intelligent Clinical Analysis</h3>
-                                </div>
-                              </div>
+                              <div className="text-[10px] text-slate-400 italic mb-1">Extract clinical rubrics from patient symptoms</div>
 
                               <div className="flex flex-col sm:flex-row items-end gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
                                 <div className="flex-1 w-full space-y-2">
