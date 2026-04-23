@@ -7968,7 +7968,27 @@ def doctor_rubric_repertorize(request):
         'why', 'how', 'all', 'any', 'some', 'more', 'most', 'other', 'such', 'only', 'own', 'same', 'there', 'their'
     }
     
+    # Split raw strings into multiple symptoms if they contain conjunctions
+    all_sub_symptoms = []
+    conjunctions = [
+        r'\band\b', r'\bwith\b', r'\balong with\b', r'\balso\b', r'\baccompanied by\b', 
+        r',', r'\.', r';', r'\n',
+        r'और', r'तथा', r'के साथ', r'साथ ही', r'भी'
+    ]
+    split_regex = '|'.join(conjunctions)
+    
     for sym in symptoms_raw:
+        # Split by conjunctions
+        parts = re.split(split_regex, str(sym), flags=re.IGNORECASE)
+        for p in parts:
+            p_strip = p.strip()
+            if len(p_strip) > 2:
+                all_sub_symptoms.append(p_strip)
+    
+    if not all_sub_symptoms and symptoms_raw:
+        all_sub_symptoms = symptoms_raw
+
+    for sym in all_sub_symptoms:
         # Strip all punctuation and convert to space, keep Devanagari blocks
         cleaned = re.sub(r'[^\w\s\u0900-\u097F]', ' ', str(sym))
         tokens = []
@@ -7981,6 +8001,7 @@ def doctor_rubric_repertorize(request):
         sentence_tokens[str(sym)] = tokens
                 
     symptoms = symptoms_cleaned
+    symptoms_raw = all_sub_symptoms # Update raw to the split ones for breakdown
 
     if not symptoms:
         return JsonResponse({'error': 'No searchable keywords extracted.'}, status=400)

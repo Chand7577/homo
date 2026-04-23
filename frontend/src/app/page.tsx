@@ -550,21 +550,34 @@ const DoctorDashboard = () => {
                             <BookOpen className="w-3 h-3" />
                             Rubrics ({rubricResults.length})
                           </div>
-                          <div className="space-y-1">
-                            {rubricResults.map((rubric) => (
-                              <button
-                                key={`rubric-${rubric.id}`}
-                                onClick={() => {
-                                  // Navigate to rubrics with search? 
-                                  // For now just console log
-                                  console.log("Selected rubric:", rubric);
-                                }}
-                                className="w-full text-left px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors group"
-                              >
-                                <p className="text-sm font-bold text-gray-900 group-hover:text-black">{rubric.name}</p>
-                                {rubric.name_hindi && <p className="text-xs text-gray-500 font-medium">{rubric.name_hindi}</p>}
-                                <p className="text-[10px] text-gray-400 mt-1 italic">{rubric.parent_name || "Chapter Level"}</p>
-                              </button>
+                          <div className="space-y-4">
+                            {Object.entries(
+                              rubricResults.reduce((acc: any, r: any) => {
+                                const cat = r.parent_name || "General";
+                                if (!acc[cat]) acc[cat] = [];
+                                acc[cat].push(r);
+                                return acc;
+                              }, {})
+                            ).map(([category, items]: [string, any]) => (
+                              <div key={category} className="space-y-1">
+                                <div className="px-3 py-1 bg-gray-50 rounded-lg text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
+                                  <Layers className="w-2.5 h-2.5" />
+                                  {category}
+                                </div>
+                                {items.map((rubric: any) => (
+                                  <button
+                                    key={`rubric-${rubric.id}`}
+                                    onClick={() => {
+                                      // Potential action: add to a quick case?
+                                      console.log("Selected rubric:", rubric);
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-gray-100 transition-colors group"
+                                  >
+                                    <p className="text-sm font-bold text-gray-900 group-hover:text-black">{rubric.name}</p>
+                                    {rubric.name_hindi && <p className="text-xs text-gray-500 font-medium">{rubric.name_hindi}</p>}
+                                  </button>
+                                ))}
+                              </div>
                             ))}
                           </div>
                         </div>
