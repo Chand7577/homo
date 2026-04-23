@@ -8036,27 +8036,41 @@ def doctor_rubric_repertorize(request):
         # Instead of one giant OR query, we search for each symptom part independently
         # and collect the top candidates. This is much faster and handles multi-chapter cases better.
         candidate_ids = set()
+        
+        # Optimize by tracking tokens we already searched
+        searched_tokens = set()
+        
         for sym_part in all_sub_symptoms:
             tokens = sentence_tokens.get(str(sym_part), [])
             if not tokens: continue
             
             # Simple keyword search for this part
             part_q = Q()
+            added_to_q = False
             for tok in tokens:
+                if tok in searched_tokens:
+                    continue
+                searched_tokens.add(tok)
                 part_q |= (
                     Q(name__icontains=tok) |
                     Q(name_hindi__icontains=tok) |
                     Q(synonyms__synonym__icontains=tok)
                 )
+                added_to_q = True
             
-            # Get top 50 candidates for this specific symptom part
-            part_matches = base_qs.filter(part_q).distinct().values_list('id', flat=True)[:50]
+            if not added_to_q:
+                continue
+                
+            # Get top 30 candidates for this specific symptom part
+            # Removed .distinct() to prevent full table scans and slow DB sorts.
+            # The python set `candidate_ids` will deduplicate the IDs safely.
+            part_matches = base_qs.filter(part_q).values_list('id', flat=True)[:30]
             candidate_ids.update(part_matches)
 
         if not candidate_ids:
             return JsonResponse({'success': True, 'total_matched': 0, 'top_rubrics': [], 'medicine_chart': [], 'symptoms_breakdown': []})
 
-        # Fetch full objects for the candidates
+        # Fetch full objects for the candidates. Here .distinct() is safe because candidate_ids is small.
         matched_rubrics = base_qs.filter(id__in=candidate_ids).distinct()
 
         # ── Step 3: Score each matched rubric ──────────────
