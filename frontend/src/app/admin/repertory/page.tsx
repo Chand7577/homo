@@ -926,19 +926,19 @@ const RepertoryManagement = () => {
                     {/* Pagination Controls */}
                     <div className="p-4 bg-gray-50 flex items-center justify-between border-t border-gray-200">
                       <div className="text-xs text-gray-500 font-medium">
-                        Showing {((medicinesPage - 1) * medicinesLimit) + 1} to {Math.min(medicinesPage * medicinesLimit, medicinesTotal)} of {medicinesTotal} medicines
+                        Showing {Math.min((medicinesPage - 1) * PAGE_SIZE + 1, medicinesTotal)}–{Math.min(medicinesPage * PAGE_SIZE, medicinesTotal)} of {medicinesTotal} medicines
                       </div>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setMedicinesPage(prev => Math.max(1, prev - 1))}
+                          onClick={() => setMedicinesPage((p) => Math.max(1, p - 1))}
                           disabled={medicinesPage === 1}
                           className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-gray-50 transition-colors"
                         >
                           Previous
                         </button>
                         <button
-                          onClick={() => setMedicinesPage(prev => prev + 1)}
-                          disabled={!hasMoreMedicines}
+                          onClick={() => setMedicinesPage((p) => p + 1)}
+                          disabled={medicinesPage * PAGE_SIZE >= medicinesTotal}
                           className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-gray-50 transition-colors"
                         >
                           Next
