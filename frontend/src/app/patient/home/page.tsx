@@ -177,9 +177,44 @@ const PatientHome = () => {
 
   // Speech Recognition state
   const [isListening, setIsListening] = useState(false);
-  const [dictationLang, setDictationLang] = useState<"en-IN" | "hi-IN">("en-IN");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [speechLang, setSpeechLang] = useState("en-IN");
+  const [translateTo, setTranslateTo] = useState<"en" | "hi">("en");
+  const [showLangDropdown, setShowLangDropdown] = useState(false);
   const recognitionRef = useRef<any>(null);
   const problemDescRef = useRef<HTMLTextAreaElement>(null);
+
+  // Supported speech languages
+  const SPEECH_LANGS = [
+    { code: "en-IN", label: "English",  langCode: "en", flag: "🇬🇧" },
+    { code: "hi-IN", label: "Hindi",    langCode: "hi", flag: "🇮🇳" },
+    { code: "bn-IN", label: "Bengali",  langCode: "bn", flag: "🇧🇩" },
+    { code: "ta-IN", label: "Tamil",    langCode: "ta", flag: "🏛️" },
+    { code: "te-IN", label: "Telugu",   langCode: "te", flag: "🏛️" },
+    { code: "kn-IN", label: "Kannada",  langCode: "kn", flag: "🏛️" },
+    { code: "ml-IN", label: "Malayalam",langCode: "ml", flag: "🏛️" },
+    { code: "mr-IN", label: "Marathi",  langCode: "mr", flag: "🏛️" },
+    { code: "gu-IN", label: "Gujarati", langCode: "gu", flag: "🏛️" },
+    { code: "pa-IN", label: "Punjabi",  langCode: "pa", flag: "🏛️" },
+    { code: "or-IN", label: "Odia",     langCode: "or", flag: "🏛️" },
+    { code: "ur-IN", label: "Urdu",     langCode: "ur", flag: "🏛️" },
+  ];
+
+  const currentLang = SPEECH_LANGS.find((l) => l.code === speechLang) || SPEECH_LANGS[0];
+
+  // Translate via MyMemory (free, no key)
+  const translateText = async (text: string, fromLangCode: string): Promise<string> => {
+    if (fromLangCode === translateTo) return text; // same language, no translation needed
+    try {
+      const res = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLangCode}|${translateTo}`
+      );
+      const data = await res.json();
+      return data?.responseData?.translatedText || text;
+    } catch {
+      return text;
+    }
+  };
 
   // Fetch doctors when city or specialty changes
   useEffect(() => {
@@ -198,37 +233,39 @@ const PatientHome = () => {
         recognitionRef.current.continuous = false;
         recognitionRef.current.interimResults = false;
 
-        recognitionRef.current.onresult = (event: any) => {
+        recognitionRef.current.onresult = async (event: any) => {
           const transcript = event.results[0][0].transcript;
-          setProblemDescription((prev) =>
-            prev ? prev + " " + transcript : transcript,
-          );
           setIsListening(false);
+          // Translate if speech lang differs from target
+          const fromCode = SPEECH_LANGS.find((l) => l.code === speechLang)?.langCode || "en";
+          if (fromCode !== translateTo) {
+            setIsTranslating(true);
+            const translated = await translateText(transcript, fromCode);
+            setIsTranslating(false);
+            setProblemDescription((prev) => prev ? prev + " " + translated : translated);
+          } else {
+            setProblemDescription((prev) => prev ? prev + " " + transcript : transcript);
+          }
         };
 
-        recognitionRef.current.onerror = () => {
-          setIsListening(false);
-        };
-
-        recognitionRef.current.onend = () => {
-          setIsListening(false);
-        };
+        recognitionRef.current.onerror = () => { setIsListening(false); };
+        recognitionRef.current.onend   = () => { setIsListening(false); };
       }
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speechLang, translateTo]);
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
       alert("Voice recognition is not supported in this browser. Try Chrome.");
       return;
     }
-
     if (isListening) {
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
       try {
-        recognitionRef.current.lang = dictationLang;
+        recognitionRef.current.lang = speechLang;
         recognitionRef.current.start();
         setIsListening(true);
       } catch (e) {
@@ -714,31 +751,62 @@ Please confirm availability.
                     Additional Details (Optional)
                   </label>
                   <div className="flex items-center gap-2">
+
+                    {/* Language picker */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowLangDropdown((p) => !p)}
+                        className="flex items-center gap-1 text-[10px] font-black text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-md transition-colors"
+                        title="Select your speaking language"
+                      >
+                        {currentLang.flag} {currentLang.label}
+                      </button>
+                      {showLangDropdown && (
+                        <div className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-xl w-40 max-h-56 overflow-y-auto">
+                          {SPEECH_LANGS.map((l) => (
+                            <button
+                              key={l.code}
+                              onClick={() => { setSpeechLang(l.code); setShowLangDropdown(false); }}
+                              className={`w-full text-left px-3 py-2 text-xs font-semibold hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                                speechLang === l.code ? "text-[#3F856C] bg-[#3F856C]/5" : "text-gray-700"
+                              }`}
+                            >
+                              {l.flag} {l.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Translate-to toggle */}
                     <button
-                      onClick={() =>
-                        setDictationLang((p) =>
-                          p === "hi-IN" ? "en-IN" : "hi-IN",
-                        )
-                      }
-                      className="text-[10px] font-black text-gray-500 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-md transition-colors"
-                      title="Toggle dictation language (English/Hindi)"
+                      onClick={() => setTranslateTo((p) => p === "en" ? "hi" : "en")}
+                      className="text-[10px] font-black text-white bg-[#3F856C] hover:bg-[#2d6350] px-2 py-1 rounded-md transition-colors"
+                      title="Translate voice to English or Hindi"
                     >
-                      {dictationLang === "hi-IN" ? "HI" : "EN"}
+                      → {translateTo === "en" ? "EN" : "HI"}
                     </button>
+
+                    {/* Mic button */}
                     <div className="relative flex items-center justify-center">
                       {isListening && (
                         <div className="absolute w-8 h-8 rounded-full bg-red-400 animate-ping pointer-events-none" />
                       )}
                       <button
                         onClick={toggleListening}
+                        disabled={isTranslating}
                         className={`relative flex items-center justify-center w-8 h-8 rounded-full transition-colors z-10 ${
                           isListening
                             ? "bg-red-500 text-white shadow-md hover:bg-red-600"
+                            : isTranslating
+                            ? "bg-yellow-400 text-white cursor-wait"
                             : "bg-gray-100 text-gray-500 hover:bg-[#3F856C]/10 hover:text-[#3F856C]"
                         }`}
-                        title="Voice dictation"
+                        title={isTranslating ? "Translating..." : "Voice dictation"}
                       >
-                        {isListening ? (
+                        {isTranslating ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : isListening ? (
                           <Mic className="w-4 h-4" />
                         ) : (
                           <MicOff className="w-4 h-4" />
@@ -747,6 +815,14 @@ Please confirm availability.
                     </div>
                   </div>
                 </div>
+
+                {/* Translation hint */}
+                {speechLang !== "en-IN" && (
+                  <p className="text-[10px] text-[#3F856C] font-semibold mb-2">
+                    🌐 Speaking in {currentLang.label} → will translate to {translateTo === "en" ? "English" : "Hindi"}
+                  </p>
+                )}
+
                 <textarea
                   ref={problemDescRef}
                   value={problemDescription}
