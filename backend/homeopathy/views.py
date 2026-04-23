@@ -8032,22 +8032,32 @@ def doctor_rubric_repertorize(request):
             except Rubric.DoesNotExist:
                 return JsonResponse({'error': 'Chapter not found'}, status=404)
 
-        # ── Step 2: Build a combined Q filter for all symptom terms ───────────
-        combined_q = Q()
-        for term in symptoms:
-            term_q = (
-                Q(name__icontains=term) |
-                Q(name_hindi__icontains=term) |
-                Q(description__icontains=term) |
-                Q(description_hindi__icontains=term) |
-                Q(synonyms__synonym__icontains=term) |
-                Q(synonyms__synonym_hindi__icontains=term) |
-                Q(modalities__name__icontains=term) |
-                Q(modalities__name_hindi__icontains=term)
-            )
-            combined_q |= term_q
+        # ── Step 2: Multi-Stage Search ─────────────────────────────────────────
+        # Instead of one giant OR query, we search for each symptom part independently
+        # and collect the top candidates. This is much faster and handles multi-chapter cases better.
+        candidate_ids = set()
+        for sym_part in all_sub_symptoms:
+            tokens = sentence_tokens.get(str(sym_part), [])
+            if not tokens: continue
+            
+            # Simple keyword search for this part
+            part_q = Q()
+            for tok in tokens:
+                part_q |= (
+                    Q(name__icontains=tok) |
+                    Q(name_hindi__icontains=tok) |
+                    Q(synonyms__synonym__icontains=tok)
+                )
+            
+            # Get top 50 candidates for this specific symptom part
+            part_matches = base_qs.filter(part_q).distinct().values_list('id', flat=True)[:50]
+            candidate_ids.update(part_matches)
 
-        matched_rubrics = base_qs.filter(combined_q).distinct()
+        if not candidate_ids:
+            return JsonResponse({'success': True, 'total_matched': 0, 'top_rubrics': [], 'medicine_chart': [], 'symptoms_breakdown': []})
+
+        # Fetch full objects for the candidates
+        matched_rubrics = base_qs.filter(id__in=candidate_ids).distinct()
 
         # ── Step 3: Score each matched rubric ──────────────
         # Score = Σ (for each symptom term) of matching_field_weights
