@@ -845,6 +845,10 @@ def get_doctors(request, doctor_id=None):
                 "qualification": doctor.qualification,
                 "registration_number": doctor.registration_number,
                 "experience_years": doctor.experience_years,
+                "doctor_class": doctor.doctor_class,
+                "aadhar_number": doctor.aadhar_number,
+                "pan_number": doctor.pan_number,
+                "license_number": doctor.license_number,
                 "created_at": doctor.created_at.isoformat(),
             })
 
