@@ -82,6 +82,7 @@ const DoctorDashboard = () => {
   const [rubricResults, setRubricResults] = useState<any[]>([]);
   const [medicineResults, setMedicineResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchDataLoading, setSearchDataLoading] = useState(false);
 
   // Speech Recognition state
   const [isListening, setIsListening] = useState(false);
@@ -159,26 +160,32 @@ const DoctorDashboard = () => {
     const tokens = tokenize(query);
     if (tokens.length === 0) return [];
 
-    let resultSet: Set<number> | null = null;
+    // Map of itemId -> matchCount
+    const scores = new Map<number, number>();
+    
     for (const tok of tokens) {
-      const matches = new Set<number>();
+      const matchedIds = new Set<number>();
       for (const [key, ids] of index.entries()) {
         if (key.includes(tok)) {
-          ids.forEach((id) => matches.add(id));
+          ids.forEach((id) => matchedIds.add(id));
         }
       }
-      if (resultSet === null) resultSet = matches;
-      else {
-        resultSet = new Set([...resultSet].filter((id) => matches.has(id)));
-      }
-      if (resultSet.size === 0) break;
+      
+      matchedIds.forEach((id) => {
+        scores.set(id, (scores.get(id) || 0) + 1);
+      });
     }
 
-    return Array.from(resultSet || []).map((id) => map.get(id));
+    // Convert to array and sort by score (desc), then by name
+    return Array.from(scores.entries())
+      .sort((a, b) => b[1] - a[1]) // Higher score first
+      .map(([id]) => map.get(id))
+      .filter(Boolean);
   };
 
   const fetchSearchData = async () => {
     try {
+      setSearchDataLoading(true);
       // Fetch rubrics
       const rRes = await fetch(`${API_BASE}/doctor/rubrics/?limit=99999`, { credentials: "include" });
       if (rRes.ok) {
@@ -196,6 +203,8 @@ const DoctorDashboard = () => {
       }
     } catch (err) {
       console.error("Failed to pre-fetch search data:", err);
+    } finally {
+      setSearchDataLoading(false);
     }
   };
 
@@ -522,7 +531,13 @@ const DoctorDashboard = () => {
               {isSearching && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 max-h-[70vh] overflow-y-auto animate-in fade-in slide-in-from-top-2">
                   <div className="p-2 md:p-4">
-                    {rubricResults.length === 0 && medicineResults.length === 0 ? (
+                    {searchDataLoading ? (
+                      <div className="py-12 text-center">
+                        <Loader2 className="w-10 h-10 text-gray-900 animate-spin mx-auto mb-4" />
+                        <p className="text-gray-500 font-medium">Indexing repertory data...</p>
+                        <p className="text-xs text-gray-400 mt-1">Almost ready</p>
+                      </div>
+                    ) : rubricResults.length === 0 && medicineResults.length === 0 ? (
                       <div className="py-8 text-center">
                         <Search className="w-12 h-12 text-gray-200 mx-auto mb-3" />
                         <p className="text-gray-500 font-medium">No results found for "{searchQuery}"</p>

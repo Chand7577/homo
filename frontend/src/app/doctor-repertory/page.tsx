@@ -80,22 +80,25 @@ function searchIndex(query: string, index: Map<string, Set<number>>, map: Map<nu
   const tokens = tokenize(query);
   if (tokens.length === 0) return [];
 
-  let resultSet: Set<number> | null = null;
+  const scores = new Map<number, number>();
+  
   for (const tok of tokens) {
-    const matches = new Set<number>();
+    const matchedIds = new Set<number>();
     for (const [key, ids] of index.entries()) {
       if (key.includes(tok)) {
-        ids.forEach((id) => matches.add(id));
+        ids.forEach((id) => matchedIds.add(id));
       }
     }
-    if (resultSet === null) resultSet = matches;
-    else {
-      resultSet = new Set([...resultSet].filter((id) => matches.has(id)));
-    }
-    if (resultSet.size === 0) break;
+    
+    matchedIds.forEach((id) => {
+      scores.set(id, (scores.get(id) || 0) + 1);
+    });
   }
 
-  return Array.from(resultSet || []).map((id) => map.get(id));
+  return Array.from(scores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => map.get(id))
+    .filter(Boolean);
 }
 
 const RepertoryManagement = () => {
