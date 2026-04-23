@@ -20,6 +20,9 @@ import {
   Download,
   AlertCircle,
   LogOut,
+  Mic,
+  MicOff,
+  X,
 } from "lucide-react";
 
 import CreateCaseModal from "@/components/CreateCaseModal";
@@ -67,6 +70,24 @@ const DoctorDashboard = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null);
 
+  // In-memory search data
+  const allRubrics = useRef<any[]>([]);
+  const allMedicines = useRef<any[]>([]);
+  const rubricIndex = useRef<Map<string, Set<number>>>(new Map());
+  const medicineIndex = useRef<Map<string, Set<number>>>(new Map());
+  const rubricMap = useRef<Map<number, any>>(new Map());
+  const medicineMap = useRef<Map<number, any>>(new Map());
+
+  // Search display state
+  const [rubricResults, setRubricResults] = useState<any[]>([]);
+  const [medicineResults, setMedicineResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Speech Recognition state
+  const [isListening, setIsListening] = useState(false);
+  const [dictationLang, setDictationLang] = useState<"en-IN" | "hi-IN">("en-IN");
+  const recognitionRef = useRef<any>(null);
+
   // Check authentication on mount
   useEffect(() => {
     checkAuth();
@@ -102,6 +123,129 @@ const DoctorDashboard = () => {
       setLoading(false);
     }
   };
+
+  // ── Search Indexer Logic ──────────────────────────────────────────────
+  const tokenize = (text: string) => {
+    return (text || "")
+      .toLowerCase()
+      .split(/[\s,.\-()/]+/)
+      .filter((t) => t.length > 1);
+  };
+
+  const buildIndex = (items: any[], type: "rubric" | "medicine") => {
+    const idx = new Map<string, Set<number>>();
+    const map = type === "rubric" ? rubricMap.current : medicineMap.current;
+    const add = (token: string, id: number) => {
+      if (!idx.has(token)) idx.set(token, new Set());
+      idx.get(token)!.add(id);
+    };
+
+    for (const item of items) {
+      map.set(item.id, item);
+      const fields = type === "rubric" 
+        ? [item.name, item.name_hindi, item.description, item.parent_name]
+        : [item.name, item.latin_name, item.common_name, item.name_hindi, item.family];
+      
+      for (const f of fields) {
+        if (f) {
+          for (const tok of tokenize(f)) add(tok, item.id);
+        }
+      }
+    }
+    return idx;
+  };
+
+  const searchIndex = (query: string, index: Map<string, Set<number>>, map: Map<number, any>) => {
+    const tokens = tokenize(query);
+    if (tokens.length === 0) return [];
+
+    let resultSet: Set<number> | null = null;
+    for (const tok of tokens) {
+      const matches = new Set<number>();
+      for (const [key, ids] of index.entries()) {
+        if (key.includes(tok)) {
+          ids.forEach((id) => matches.add(id));
+        }
+      }
+      if (resultSet === null) resultSet = matches;
+      else {
+        resultSet = new Set([...resultSet].filter((id) => matches.has(id)));
+      }
+      if (resultSet.size === 0) break;
+    }
+
+    return Array.from(resultSet || []).map((id) => map.get(id));
+  };
+
+  const fetchSearchData = async () => {
+    try {
+      // Fetch rubrics
+      const rRes = await fetch(`${API_BASE}/doctor/rubrics/?limit=99999`, { credentials: "include" });
+      if (rRes.ok) {
+        const rData = await rRes.json();
+        allRubrics.current = rData.rubrics || [];
+        rubricIndex.current = buildIndex(allRubrics.current, "rubric");
+      }
+
+      // Fetch medicines
+      const mRes = await fetch(`${API_BASE}/doctor/medicines/all/?limit=99999`, { credentials: "include" });
+      if (mRes.ok) {
+        const mData = await mRes.json();
+        allMedicines.current = mData.medicines || [];
+        medicineIndex.current = buildIndex(allMedicines.current, "medicine");
+      }
+    } catch (err) {
+      console.error("Failed to pre-fetch search data:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (doctor) {
+      fetchSearchData();
+    }
+  }, [doctor]);
+
+  // Speech Recognition initialization
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setSearchQuery(transcript);
+          setIsListening(false);
+        };
+        recognitionRef.current.onend = () => setIsListening(false);
+      }
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      recognitionRef.current.lang = dictationLang;
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setIsSearching(true);
+      const r = searchIndex(searchQuery, rubricIndex.current, rubricMap.current);
+      const m = searchIndex(searchQuery, medicineIndex.current, medicineMap.current);
+      setRubricResults(r.slice(0, 10));
+      setMedicineResults(m.slice(0, 10));
+    } else {
+      setIsSearching(false);
+      setRubricResults([]);
+      setMedicineResults([]);
+    }
+  }, [searchQuery]);
 
   const fetchDashboardStats = async () => {
     try {
@@ -329,15 +473,127 @@ const DoctorDashboard = () => {
             </div>
 
             {/* Search Bar */}
-            <div className="mt-3 md:mt-6 relative">
-              <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-gray-400" />
+            <div className="mt-3 md:mt-6 relative group">
+              <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-gray-400 group-focus-within:text-gray-900 transition-colors" />
               <input
                 type="text"
-                placeholder="Search rubrics, symptoms..."
+                placeholder="Search rubrics, medicines, symptoms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 md:pl-12 pr-3 md:pr-4 py-2.5 md:py-3.5 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-xl md:rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
+                className="w-full pl-10 md:pl-12 pr-24 py-2.5 md:py-3.5 text-sm md:text-base bg-gray-50 border border-gray-200 rounded-xl md:rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all shadow-sm"
               />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
+                    title="Clear search"
+                  >
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                )}
+                <div className="h-4 w-[1px] bg-gray-300 mx-1" />
+                <button
+                  onClick={() => setDictationLang(p => p === "en-IN" ? "hi-IN" : "en-IN")}
+                  className="text-[10px] font-black text-gray-500 hover:text-gray-900 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-all"
+                  title="Toggle voice search language (English/Hindi)"
+                >
+                  {dictationLang === "en-IN" ? "EN" : "HI"}
+                </button>
+                <div className="relative flex items-center justify-center">
+                  {isListening && (
+                    <div className="absolute w-8 h-8 rounded-full bg-red-400 animate-ping pointer-events-none" />
+                  )}
+                  <button
+                    onClick={toggleListening}
+                    className={`relative flex items-center justify-center w-8 h-8 rounded-full transition-all z-10 ${
+                      isListening
+                        ? "bg-red-500 text-white shadow-md"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                    title="Voice search"
+                  >
+                    {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Instant Search Results Dropdown */}
+              {isSearching && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 max-h-[70vh] overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                  <div className="p-2 md:p-4">
+                    {rubricResults.length === 0 && medicineResults.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <Search className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                        <p className="text-gray-500 font-medium">No results found for "{searchQuery}"</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Rubric Results */}
+                        <div>
+                          <div className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50 mb-2">
+                            <BookOpen className="w-3 h-3" />
+                            Rubrics ({rubricResults.length})
+                          </div>
+                          <div className="space-y-1">
+                            {rubricResults.map((rubric) => (
+                              <button
+                                key={`rubric-${rubric.id}`}
+                                onClick={() => {
+                                  // Navigate to rubrics with search? 
+                                  // For now just console log
+                                  console.log("Selected rubric:", rubric);
+                                }}
+                                className="w-full text-left px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors group"
+                              >
+                                <p className="text-sm font-bold text-gray-900 group-hover:text-black">{rubric.name}</p>
+                                {rubric.name_hindi && <p className="text-xs text-gray-500 font-medium">{rubric.name_hindi}</p>}
+                                <p className="text-[10px] text-gray-400 mt-1 italic">{rubric.parent_name || "Chapter Level"}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Medicine Results */}
+                        <div>
+                          <div className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50 mb-2">
+                            <Pill className="w-3 h-3" />
+                            Medicines ({medicineResults.length})
+                          </div>
+                          <div className="space-y-1">
+                            {medicineResults.map((med) => (
+                              <button
+                                key={`med-${med.id}`}
+                                onClick={() => {
+                                  // Navigate to medicines?
+                                  console.log("Selected medicine:", med);
+                                }}
+                                className="w-full text-left px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors group"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <p className="text-sm font-bold text-gray-900 group-hover:text-black">{med.name}</p>
+                                  <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500">{med.family || "N/A"}</span>
+                                </div>
+                                <p className="text-xs text-gray-600 italic">{med.latin_name}</p>
+                                {med.name_hindi && <p className="text-[10px] text-gray-500 mt-0.5">{med.name_hindi}</p>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400 italic">
+                      <p>Showing top 10 results each</p>
+                      <button 
+                        onClick={() => setSearchQuery("")}
+                        className="text-gray-900 font-bold hover:underline not-italic"
+                      >
+                        Clear Search
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

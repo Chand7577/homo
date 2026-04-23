@@ -89,6 +89,7 @@ urlpatterns = [
     path('doctor/rubrics/chapters/', views.get_chapters, name='get_chapters'),
     path('doctor/rubrics/tree/', views.get_rubric_tree, name='get_rubric_tree_doctor'),
     path('doctor/rubrics/search/', views.intelligent_rubric_search, name='rubric_search'),
+    path('doctor/rubrics/', views.get_rubrics, name='get_rubrics_doctor_list'),
     path('doctor/rubrics/<int:rubric_id>/', views.get_rubric_detail, name='get_rubric_detail'),
     path('doctor/rubrics/<int:rubric_id>/medicines/', views.get_rubric_medicines, name='get_rubric_medicines'),
     
@@ -174,6 +175,7 @@ urlpatterns = [
     path('doctor/cases/<int:case_id>/remove-rubric/<int:rubric_id>/', views.remove_case_rubric, name='remove_case_rubric'),
 
     path('doctor/medicines/', views.get_all_medicines, name='doctor-get-medicines'),   
+    path('doctor/medicines/all/', views.get_medicines, name='doctor-get-medicines-all'),   
     path('doctor/medicines/<int:medicine_id>/', views.get_medicine_detail, name='doctor-get-medicine-detail'),
     path('doctor/medicines/create/', views.create_medicine, name='doctor-create-medicine'),
     path('doctor/medicines/<int:medicine_id>/update/', views.update_medicine, name='doctor-update-medicine'),

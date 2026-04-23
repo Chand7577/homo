@@ -267,6 +267,17 @@ def require_patient(view_func):
     return wrapper
 
 
+def require_admin_or_doctor(view_func):
+    """Decorator to check if user is admin or doctor"""
+    def wrapper(request, *args, **kwargs):
+        is_admin = request.session.get('is_admin', False)
+        is_doctor = request.session.get('doctor_id') is not None
+        if not (is_admin or is_doctor):
+            return JsonResponse({'error': 'Unauthorized. Admin or Doctor access required.'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 
 @csrf_exempt
 def admin_send_otp(request):
@@ -1693,7 +1704,7 @@ def create_rubric(request):
 
 
 @csrf_exempt
-@require_admin
+@require_admin_or_doctor
 def get_rubrics(request):
     """Get rubrics with optimized queries and pagination"""
     if request.method != "GET":
@@ -2006,7 +2017,7 @@ def create_medicine(request):
 
 
 @csrf_exempt
-@require_admin
+@require_admin_or_doctor
 def get_medicines(request):
     """Get all medicines with pagination and optimized counts"""
     if request.method != "GET":
