@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search,
   Plus,
@@ -83,20 +83,109 @@ interface Medicine {
   created_at: string;
 }
 
+const PAGE_SIZE = 50;
+
+// ── Inverted-index helpers ─────────────────────────────────────────────────
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097f ]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 1);
+}
+
+function buildRubricIndex(items: Rubric[]): Map<string, Set<number>> {
+  const idx = new Map<string, Set<number>>();
+  const add = (token: string, id: number) => {
+    if (!idx.has(token)) idx.set(token, new Set());
+    idx.get(token)!.add(id);
+  };
+  for (const r of items) {
+    const fields = [
+      r.name, r.name_hindi, r.sub_rubric, r.sub_rubric_hindi,
+      r.category, r.sheet_name, r.description, r.description_hindi,
+      r.parent_name,
+      ...(r.synonyms || []),
+      ...(r.synonyms_detailed?.english || []),
+      ...(r.synonyms_detailed?.hindi || []),
+      ...(r.cross_references?.english || []),
+      ...(r.cross_references?.hindi || []),
+      ...(r.modalities || []),
+    ];
+    for (const f of fields) {
+      if (f) for (const tok of tokenize(f)) add(tok, r.id);
+    }
+  }
+  return idx;
+}
+
+function buildMedicineIndex(items: Medicine[]): Map<string, Set<number>> {
+  const idx = new Map<string, Set<number>>();
+  const add = (token: string, id: number) => {
+    if (!idx.has(token)) idx.set(token, new Set());
+    idx.get(token)!.add(id);
+  };
+  for (const m of items) {
+    const fields = [
+      m.name, m.latin_name, m.common_name, m.indications,
+      m.contraindications, m.source, m.description,
+      ...(m.potencies || []),
+    ];
+    for (const f of fields) {
+      if (f) for (const tok of tokenize(f)) add(tok, m.id);
+    }
+  }
+  return idx;
+}
+
+function searchIndex<T extends { id: number }>(
+  query: string,
+  idx: Map<string, Set<number>>,
+  itemMap: Map<number, T>
+): T[] {
+  const tokens = tokenize(query);
+  if (!tokens.length) return Array.from(itemMap.values());
+
+  // Intersect Sets for each token (AND semantics)
+  let result: Set<number> | null = null;
+  for (const tok of tokens) {
+    // Prefix match: find all index keys that start with tok
+    const matching = new Set<number>();
+    for (const [key, ids] of idx) {
+      if (key.startsWith(tok)) ids.forEach((id) => matching.add(id));
+    }
+    if (result === null) {
+      result = matching;
+    } else {
+      // intersect
+      for (const id of result) {
+        if (!matching.has(id)) result.delete(id);
+      }
+    }
+    if (result.size === 0) break;
+  }
+
+  return Array.from(result || []).map((id) => itemMap.get(id)!).filter(Boolean);
+}
+
 const RepertoryManagement = () => {
-  const [activeTab, setActiveTab] = useState<"rubrics" | "medicines">(
-    "rubrics",
-  );
+  const [activeTab, setActiveTab] = useState<"rubrics" | "medicines">("rubrics");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Rubrics state
+  // Master data (all records, loaded once)
+  const allRubrics    = useRef<Rubric[]>([]);
+  const allMedicines  = useRef<Medicine[]>([]);
+  const rubricIndex   = useRef<Map<string, Set<number>>>(new Map());
+  const medicineIndex = useRef<Map<string, Set<number>>>(new Map());
+  const rubricMap     = useRef<Map<number, Rubric>>(new Map());
+  const medicineMap   = useRef<Map<number, Medicine>>(new Map());
+
+  // Display state
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [filteredRubrics, setFilteredRubrics] = useState<Rubric[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
-
-  // Medicines state
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
 
@@ -108,70 +197,72 @@ const RepertoryManagement = () => {
   const [deletingItem, setDeletingItem] = useState<any>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Pagination state
-  const [rubricsPage, setRubricsPage] = useState(1);
-  const [rubricsTotal, setRubricsTotal] = useState(0);
-  const [rubricsLimit] = useState(50);
-  const [hasMoreRubrics, setHasMoreRubrics] = useState(false);
-
-  const [medicinesPage, setMedicinesPage] = useState(1);
+  // Pagination (client-side virtual)
+  const [rubricsPage, setRubricsPage]       = useState(1);
+  const [medicinesPage, setMedicinesPage]   = useState(1);
+  const [rubricsTotal, setRubricsTotal]     = useState(0);
   const [medicinesTotal, setMedicinesTotal] = useState(0);
-  const [medicinesLimit] = useState(50);
-  const [hasMoreMedicines, setHasMoreMedicines] = useState(false);
 
-  // Fetch rubrics when page or search changes
+  // ── Apply client-side filter + paginate ───────────────────────────────
+  const applyRubricFilter = useCallback(
+    (query: string, category: string, page: number, all: Rubric[]) => {
+      let results = query.trim()
+        ? searchIndex(query, rubricIndex.current, rubricMap.current)
+        : all;
+      if (category)
+        results = results.filter((r) => (r.sheet_name || r.category) === category);
+      setRubricsTotal(results.length);
+      const start = (page - 1) * PAGE_SIZE;
+      setFilteredRubrics(results.slice(start, start + PAGE_SIZE));
+      setRubrics(results.slice(start, start + PAGE_SIZE));
+    },
+    []
+  );
+
+  const applyMedicineFilter = useCallback(
+    (query: string, page: number, all: Medicine[]) => {
+      const results = query.trim()
+        ? searchIndex(query, medicineIndex.current, medicineMap.current)
+        : all;
+      setMedicinesTotal(results.length);
+      const start = (page - 1) * PAGE_SIZE;
+      setFilteredMedicines(results.slice(start, start + PAGE_SIZE));
+      setMedicines(results.slice(start, start + PAGE_SIZE));
+    },
+    []
+  );
+
+  // Re-filter whenever query / category / page changes (no network)
   useEffect(() => {
-    fetchRubrics();
-  }, [rubricsPage, selectedCategory]);
+    applyRubricFilter(searchQuery, selectedCategory, rubricsPage, allRubrics.current);
+  }, [searchQuery, selectedCategory, rubricsPage, applyRubricFilter]);
 
-  // Fetch medicines when page or search changes
   useEffect(() => {
-    fetchMedicines();
-  }, [medicinesPage]);
+    applyMedicineFilter(searchQuery, medicinesPage, allMedicines.current);
+  }, [searchQuery, medicinesPage, applyMedicineFilter]);
 
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setRubricsPage(1);
-      setMedicinesPage(1);
-      fetchRubrics();
-      fetchMedicines();
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
+  // Load ALL rubrics once and build index
   const fetchRubrics = async () => {
     setLoading(true);
     setError("");
-
     try {
-      let url = `${API_BASE}/admin/rubrics/?page=${rubricsPage}&limit=${rubricsLimit}`;
-      if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`;
-      if (selectedCategory) url += `&category=${encodeURIComponent(selectedCategory)}`;
-
-      const response = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-      });
-
+      const response = await fetch(
+        `${API_BASE}/admin/rubrics/?page=1&limit=99999`,
+        { credentials: "include" }
+      );
       if (response.status === 403 || response.status === 401) {
         setError("Authentication required. Please log in as admin.");
-        setLoading(false);
         return;
       }
-
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to fetch rubrics");
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch rubrics");
-      }
-
-      setRubrics(data.rubrics || []);
-      setFilteredRubrics(data.rubrics || []);
-      setRubricsTotal(data.total || 0);
-      setHasMoreRubrics(data.has_more || false);
-
-      console.log(`✓ Loaded page ${rubricsPage} of rubrics`);
+      const items: Rubric[] = data.rubrics || [];
+      allRubrics.current = items;
+      rubricMap.current  = new Map(items.map((r) => [r.id, r]));
+      rubricIndex.current = buildRubricIndex(items);
+      applyRubricFilter(searchQuery, selectedCategory, 1, items);
+      setRubricsPage(1);
     } catch (err: any) {
       setError(err.message || "Failed to load rubrics");
     } finally {
@@ -179,42 +270,37 @@ const RepertoryManagement = () => {
     }
   };
 
+  // Load ALL medicines once and build index
   const fetchMedicines = async () => {
     setLoading(true);
     setError("");
-
     try {
-      let url = `${API_BASE}/admin/medicines/?page=${medicinesPage}&limit=${medicinesLimit}`;
-      if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`;
-
-      const response = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-      });
-
+      const response = await fetch(
+        `${API_BASE}/admin/medicines/?page=1&limit=99999`,
+        { credentials: "include" }
+      );
       if (response.status === 403 || response.status === 401) {
         setError("Authentication required. Please log in as admin.");
-        setLoading(false);
         return;
       }
-
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to fetch medicines");
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch medicines");
-      }
-
-      setMedicines(data.medicines || []);
-      setFilteredMedicines(data.medicines || []);
-      setMedicinesTotal(data.total || 0);
-      setHasMoreMedicines(data.has_more || false);
-
+      const items: Medicine[] = data.medicines || [];
+      allMedicines.current = items;
+      medicineMap.current  = new Map(items.map((m) => [m.id, m]));
+      medicineIndex.current = buildMedicineIndex(items);
+      applyMedicineFilter(searchQuery, 1, items);
+      setMedicinesPage(1);
     } catch (err: any) {
       setError(err.message || "Failed to load medicines");
     } finally {
       setLoading(false);
     }
   };
+
+  // Bootstrap on mount
+  useEffect(() => { fetchRubrics(); fetchMedicines(); }, []); // eslint-disable-line
 
   const handleDeleteRubric = async () => {
     if (!deletingItem) return;
@@ -315,9 +401,8 @@ const RepertoryManagement = () => {
     }
   };
 
-  // Get unique categories from rubrics (use sheet_name if available, else category)
   const categories = Array.from(
-    new Set(rubrics.map((r) => r.sheet_name || r.category).filter(Boolean)),
+    new Set(allRubrics.current.map((r) => r.sheet_name || r.category).filter(Boolean))
   ).sort();
 
   return (
@@ -673,19 +758,19 @@ const RepertoryManagement = () => {
                     {/* Pagination Controls */}
                     <div className="p-4 bg-gray-50 flex items-center justify-between border-t border-gray-200">
                       <div className="text-xs text-gray-500 font-medium">
-                        Showing {((rubricsPage - 1) * rubricsLimit) + 1} to {Math.min(rubricsPage * rubricsLimit, rubricsTotal)} of {rubricsTotal} rubrics
+                        Showing {Math.min((rubricsPage - 1) * PAGE_SIZE + 1, rubricsTotal)}–{Math.min(rubricsPage * PAGE_SIZE, rubricsTotal)} of {rubricsTotal} rubrics
                       </div>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setRubricsPage(prev => Math.max(1, prev - 1))}
+                          onClick={() => setRubricsPage((p) => Math.max(1, p - 1))}
                           disabled={rubricsPage === 1}
                           className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-gray-50 transition-colors"
                         >
                           Previous
                         </button>
                         <button
-                          onClick={() => setRubricsPage(prev => prev + 1)}
-                          disabled={!hasMoreRubrics}
+                          onClick={() => setRubricsPage((p) => p + 1)}
+                          disabled={rubricsPage * PAGE_SIZE >= rubricsTotal}
                           className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-gray-50 transition-colors"
                         >
                           Next
