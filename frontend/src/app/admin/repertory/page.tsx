@@ -21,6 +21,8 @@ import {
   Layers,
   Globe,
   Tag,
+  Mic,
+  MicOff,
 } from "lucide-react";
 
 import RubricModal from "@/components/RubricModal";
@@ -202,6 +204,58 @@ const RepertoryManagement = () => {
   const [medicinesPage, setMedicinesPage]   = useState(1);
   const [rubricsTotal, setRubricsTotal]     = useState(0);
   const [medicinesTotal, setMedicinesTotal] = useState(0);
+
+  // Speech Recognition state
+  const [isListening, setIsListening] = useState(false);
+  const [dictationLang, setDictationLang] = useState<"en-IN" | "hi-IN">("en-IN");
+  const recognitionRef = useRef<any>(null);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+
+        recognitionRef.current.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setSearchQuery(transcript);
+          setIsListening(false);
+        };
+
+        recognitionRef.current.onerror = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+        };
+      }
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert("Voice recognition is not supported in this browser. Try Chrome.");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.lang = dictationLang;
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
 
   // ── Apply client-side filter + paginate ───────────────────────────────
   const applyRubricFilter = useCallback(
@@ -469,8 +523,8 @@ const RepertoryManagement = () => {
         <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 mb-6">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 sm:w-5 h-4 sm:h-5 text-gray-400" />
+              <div className="relative flex-1 group">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 sm:w-5 h-4 sm:h-5 text-gray-400 group-focus-within:text-gray-900 transition-colors" />
                 <input
                   type="text"
                   placeholder={
@@ -480,16 +534,43 @@ const RepertoryManagement = () => {
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 sm:pl-12 pr-10 py-2.5 sm:py-3 text-sm sm:text-base bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-24 py-2.5 sm:py-3 text-sm sm:text-base bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
                 />
-                {searchQuery && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
+                      title="Clear search"
+                    >
+                      <X className="w-4 h-4 text-gray-500" />
+                    </button>
+                  )}
+                  <div className="h-4 w-[1px] bg-gray-300 mx-1" />
                   <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-lg"
+                    onClick={() => setDictationLang(p => p === "en-IN" ? "hi-IN" : "en-IN")}
+                    className="text-[10px] font-black text-gray-500 hover:text-gray-900 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-all"
+                    title="Toggle voice search language (English/Hindi)"
                   >
-                    <X className="w-4 h-4 text-gray-500" />
+                    {dictationLang === "en-IN" ? "EN" : "HI"}
                   </button>
-                )}
+                  <div className="relative flex items-center justify-center">
+                    {isListening && (
+                      <div className="absolute w-8 h-8 rounded-full bg-red-400 animate-ping pointer-events-none" />
+                    )}
+                    <button
+                      onClick={toggleListening}
+                      className={`relative flex items-center justify-center w-8 h-8 rounded-full transition-all z-10 ${
+                        isListening
+                          ? "bg-red-500 text-white shadow-md"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      }`}
+                      title="Voice search"
+                    >
+                      {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={handleSuccess}
