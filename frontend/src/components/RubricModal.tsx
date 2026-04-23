@@ -12,6 +12,9 @@ import {
   Upload,
   Download,
   FileSpreadsheet,
+  Search,
+  Layers,
+  Loader2,
 } from "lucide-react";
 
 const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
@@ -32,7 +35,18 @@ const RubricModal = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [mode, setMode] = useState<"single" | "bulk">("single");
+  const [mode, setMode] = useState<"single" | "sub-rubrics" | "bulk">("single");
+
+  // Sub-rubrics mode state
+  const [parentSearch, setParentSearch] = useState("");
+  const [parentResults, setParentResults] = useState<any[]>([]);
+  const [parentSearching, setParentSearching] = useState(false);
+  const [selectedParent, setSelectedParent] = useState<any>(null);
+  const [showParentDropdown, setShowParentDropdown] = useState(false);
+  const [subRows, setSubRows] = useState([{ name: "", description: "" }]);
+  const [subLoading, setSubLoading] = useState(false);
+  const [subResults, setSubResults] = useState<{ name: string; ok: boolean; msg: string }[]>([]);
+  const parentSearchTimer = useRef<any>(null);
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -109,6 +123,12 @@ const RubricModal = ({
     setErrors({});
     setUploadFile(null);
     setUploadProgress(null);
+    // reset sub-rubrics
+    setParentSearch("");
+    setParentResults([]);
+    setSelectedParent(null);
+    setSubRows([{ name: "", description: "" }]);
+    setSubResults([]);
   }, [rubric, isOpen]);
 
   const handleChange = (
@@ -132,6 +152,70 @@ const RubricModal = ({
 
   const addSynonym = () => {
     setSynonyms([...synonyms, ""]);
+  };
+
+  // ── Parent search ─────────────────────────────────────────────────
+  const searchParent = (q: string) => {
+    setParentSearch(q);
+    setShowParentDropdown(true);
+    clearTimeout(parentSearchTimer.current);
+    if (!q.trim()) { setParentResults([]); return; }
+    parentSearchTimer.current = setTimeout(async () => {
+      setParentSearching(true);
+      try {
+        const res = await fetch(
+          `${API_BASE}/doctor/rubrics/search/?query=${encodeURIComponent(q)}`,
+          { credentials: "include" }
+        );
+        const data = await res.json();
+        setParentResults(data.rubrics || data.results || []);
+      } catch { setParentResults([]); }
+      finally { setParentSearching(false); }
+    }, 350);
+  };
+
+  // ── Sub-row helpers ───────────────────────────────────────────────
+  const addSubRow = () => setSubRows(r => [...r, { name: "", description: "" }]);
+  const removeSubRow = (i: number) => setSubRows(r => r.filter((_, idx) => idx !== i));
+  const updateSubRow = (i: number, field: string, val: string) =>
+    setSubRows(r => r.map((row, idx) => idx === i ? { ...row, [field]: val } : row));
+
+  // ── Submit sub-rubrics ────────────────────────────────────────────
+  const handleSubmitSubRubrics = async () => {
+    if (!selectedParent) { setError("Please select a parent rubric."); return; }
+    const validRows = subRows.filter(r => r.name.trim());
+    if (!validRows.length) { setError("Add at least one sub-rubric name."); return; }
+    setSubLoading(true); setError(""); setSubResults([]);
+    const results: { name: string; ok: boolean; msg: string }[] = [];
+    for (const row of validRows) {
+      try {
+        const res = await fetch(`${API_BASE}/admin/rubrics/create/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            name: row.name.trim(),
+            description: row.description.trim(),
+            category: selectedParent.category || "",
+            language: "EN",
+            modality: "General",
+            parent_id: selectedParent.id,
+            synonyms: [],
+          }),
+        });
+        const data = await res.json();
+        results.push({ name: row.name, ok: res.ok, msg: res.ok ? "Created" : (data.error || "Failed") });
+      } catch {
+        results.push({ name: row.name, ok: false, msg: "Network error" });
+      }
+    }
+    setSubResults(results);
+    setSubLoading(false);
+    const allOk = results.every(r => r.ok);
+    if (allOk) {
+      setSuccess(`${results.length} sub-rubric(s) created under "${selectedParent.name}"!`);
+      setTimeout(() => { onSuccess(); onClose(); }, 1800);
+    }
   };
 
   const removeSynonym = (index: number) => {
@@ -345,27 +429,34 @@ const RubricModal = ({
             <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
               <button
                 onClick={() => setMode("single")}
-                className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${
-                  mode === "single"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
+                className={`flex-1 py-2 px-3 rounded-lg font-semibold text-xs transition-all ${
+                  mode === "single" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                 }`}
               >
-                <div className="flex items-center justify-center gap-2">
-                  <BookOpen className="w-4 h-4" />
-                  Single Entry
+                <div className="flex items-center justify-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Single
+                </div>
+              </button>
+              <button
+                onClick={() => { setMode("sub-rubrics"); setError(""); }}
+                className={`flex-1 py-2 px-3 rounded-lg font-semibold text-xs transition-all ${
+                  mode === "sub-rubrics" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" />
+                  Sub-Rubrics
                 </div>
               </button>
               <button
                 onClick={() => setMode("bulk")}
-                className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${
-                  mode === "bulk"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
+                className={`flex-1 py-2 px-3 rounded-lg font-semibold text-xs transition-all ${
+                  mode === "bulk" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                 }`}
               >
-                <div className="flex items-center justify-center gap-2">
-                  <Upload className="w-4 h-4" />
+                <div className="flex items-center justify-center gap-1.5">
+                  <Upload className="w-3.5 h-3.5" />
                   Bulk Upload
                 </div>
               </button>
@@ -375,7 +466,117 @@ const RubricModal = ({
 
         {/* Content */}
         <div className="p-6">
-          {mode === "bulk" && !rubric ? (
+          {mode === "sub-rubrics" && !rubric ? (
+            /* ── Sub-Rubrics Form ── */
+            <div className="space-y-5">
+              {/* Parent rubric search */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Parent Rubric *</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={selectedParent ? selectedParent.name : parentSearch}
+                    onChange={e => { setSelectedParent(null); searchParent(e.target.value); }}
+                    onFocus={() => setShowParentDropdown(true)}
+                    placeholder="Search for a rubric (e.g. Mind, Anxiety)…"
+                    className="w-full pl-9 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-gray-900 focus:outline-none text-sm"
+                  />
+                  {parentSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />}
+                  {selectedParent && (
+                    <button onClick={() => { setSelectedParent(null); setParentSearch(""); }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gray-200 hover:bg-red-400 flex items-center justify-center transition-colors">
+                      <X className="w-3 h-3 text-white" />
+                    </button>
+                  )}
+                  {showParentDropdown && !selectedParent && parentResults.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                      {parentResults.map((r: any) => (
+                        <button key={r.id} type="button"
+                          onClick={() => { setSelectedParent(r); setParentSearch(""); setShowParentDropdown(false); }}
+                          className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0">
+                          <p className="font-semibold text-sm text-gray-900">{r.name}</p>
+                          {r.full_path && <p className="text-xs text-gray-400 mt-0.5 truncate">{r.full_path}</p>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedParent && (
+                  <div className="mt-2 px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                    <span className="text-xs font-semibold text-sky-800 truncate">{selectedParent.full_path || selectedParent.name}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Sub-rubric rows */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-semibold text-gray-700">Sub-Rubrics to Add *</label>
+                  <button type="button" onClick={addSubRow}
+                    className="flex items-center gap-1.5 text-sm text-[#3F856C] hover:text-[#2d6350] font-semibold">
+                    <Plus className="w-4 h-4" /> Add Row
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {subRows.map((row, i) => (
+                    <div key={i} className="flex gap-2 items-start">
+                      <div className="flex-1 space-y-1">
+                        <input
+                          type="text"
+                          value={row.name}
+                          onChange={e => updateSubRow(i, "name", e.target.value)}
+                          placeholder={`Sub-rubric name ${i + 1} *`}
+                          className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-gray-900 focus:outline-none text-sm transition-colors"
+                        />
+                        <input
+                          type="text"
+                          value={row.description}
+                          onChange={e => updateSubRow(i, "description", e.target.value)}
+                          placeholder="Description (optional)"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-gray-400 focus:outline-none text-xs text-gray-600 transition-colors"
+                        />
+                      </div>
+                      {subRows.length > 1 && (
+                        <button type="button" onClick={() => removeSubRow(i)}
+                          className="mt-1 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">{subRows.filter(r => r.name.trim()).length} of {subRows.length} row(s) will be submitted</p>
+              </div>
+
+              {/* Results after submit */}
+              {subResults.length > 0 && (
+                <div className="space-y-1.5">
+                  {subResults.map((r, i) => (
+                    <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
+                      r.ok ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"
+                    }`}>
+                      {r.ok ? <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />}
+                      <span className="font-bold">{r.name}</span> — {r.msg}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Action */}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={onClose} disabled={subLoading}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+                  Cancel
+                </button>
+                <button type="button" onClick={handleSubmitSubRubrics} disabled={subLoading || !selectedParent}
+                  className="flex-1 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  {subLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : <><Layers className="w-4 h-4" /> Create Sub-Rubrics</>}
+                </button>
+              </div>
+            </div>
+          ) : mode === "bulk" && !rubric ? (
             /* Bulk Upload Form */
             <div className="space-y-6">
               {/* Download Template Section */}
