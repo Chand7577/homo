@@ -8016,20 +8016,17 @@ def doctor_rubric_repertorize(request):
             try:
                 chapter = Rubric.objects.get(id=chapter_id, level=0, is_active=True)
                 # Collect IDs of this chapter and all descendants using recursion-safe BFS
-                def get_descendant_ids(parent_id, collected=None):
-                    if collected is None:
-                        collected = set()
-                    children_ids = list(
-                        Rubric.objects.filter(parent_id=parent_id, is_active=True)
-                        .values_list('id', flat=True)
-                    )
-                    for cid in children_ids:
-                        if cid not in collected:
-                            collected.add(cid)
-                            get_descendant_ids(cid, collected)
-                    return collected
+                def get_descendants(root_id):
+                    all_ids = set()
+                    to_visit = [root_id]
+                    while to_visit:
+                        children = list(Rubric.objects.filter(parent_id__in=to_visit, is_active=True).values_list('id', flat=True))
+                        new_children = [c for c in children if c not in all_ids]
+                        all_ids.update(new_children)
+                        to_visit = new_children
+                    return all_ids
 
-                descendant_ids = get_descendant_ids(chapter_id)
+                descendant_ids = get_descendants(chapter_id)
                 descendant_ids.add(chapter_id)
                 base_qs = base_qs.filter(id__in=descendant_ids)
             except Rubric.DoesNotExist:

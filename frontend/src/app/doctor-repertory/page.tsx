@@ -83,16 +83,20 @@ function searchIndex(query: string, index: Map<string, Set<number>>, map: Map<nu
   const scores = new Map<number, number>();
   
   for (const tok of tokens) {
-    const matchedIds = new Set<number>();
-    for (const [key, ids] of index.entries()) {
-      if (key.includes(tok)) {
-        ids.forEach((id) => matchedIds.add(id));
+    // 1. Direct match (Fast)
+    let ids = index.get(tok);
+    if (ids) {
+      ids.forEach(id => scores.set(id, (scores.get(id) || 0) + 1));
+    }
+
+    // 2. Partial match (Slower, only if direct matches are low)
+    if (!ids || ids.size < 5) {
+      for (const [key, keyIds] of index.entries()) {
+        if (key !== tok && key.includes(tok)) {
+          keyIds.forEach(id => scores.set(id, (scores.get(id) || 0) + 1));
+        }
       }
     }
-    
-    matchedIds.forEach((id) => {
-      scores.set(id, (scores.get(id) || 0) + 1);
-    });
   }
 
   return Array.from(scores.entries())

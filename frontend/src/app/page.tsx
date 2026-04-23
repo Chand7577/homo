@@ -160,25 +160,30 @@ const DoctorDashboard = () => {
     const tokens = tokenize(query);
     if (tokens.length === 0) return [];
 
-    // Map of itemId -> matchCount
     const scores = new Map<number, number>();
     
     for (const tok of tokens) {
-      const matchedIds = new Set<number>();
-      for (const [key, ids] of index.entries()) {
-        if (key.includes(tok)) {
-          ids.forEach((id) => matchedIds.add(id));
+      // 1. Direct match (Fastest)
+      let ids = index.get(tok);
+      if (ids) {
+        ids.forEach(id => scores.set(id, (scores.get(id) || 0) + 1));
+      }
+
+      // 2. Partial match (Only if token is short or for better recall)
+      // To keep it fast, we only scan if we have few tokens or for specific scenarios
+      // but for now, let's just do a limited scan if needed.
+      // Optimization: Only scan if direct matches are low
+      if (!ids || ids.size < 5) {
+        for (const [key, keyIds] of index.entries()) {
+          if (key !== tok && key.includes(tok)) {
+            keyIds.forEach(id => scores.set(id, (scores.get(id) || 0) + 1));
+          }
         }
       }
-      
-      matchedIds.forEach((id) => {
-        scores.set(id, (scores.get(id) || 0) + 1);
-      });
     }
 
-    // Convert to array and sort by score (desc), then by name
     return Array.from(scores.entries())
-      .sort((a, b) => b[1] - a[1]) // Higher score first
+      .sort((a, b) => b[1] - a[1])
       .map(([id]) => map.get(id))
       .filter(Boolean);
   };
