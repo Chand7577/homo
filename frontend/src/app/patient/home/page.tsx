@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   MapPin,
@@ -140,6 +141,7 @@ const MEDICAL_SPECIALTIES = {
 };
 
 const PatientHome = () => {
+  const router = useRouter();
   // Multi-step state
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedCity, setSelectedCity] = useState("");
@@ -558,7 +560,7 @@ Please confirm availability.
 
             {/* Inbox Button */}
             <button
-              onClick={() => setShowInbox(true)}
+              onClick={() => router.push("/patient/inboxes")}
               className="mb-6 inline-flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-full border border-white/20 transition-all relative"
             >
               <Inbox className="w-5 h-5" />
@@ -1462,7 +1464,10 @@ Please confirm availability.
 
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                onClick={() => setShowInbox(true)}
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  router.push("/patient/inboxes");
+                }}
                 className="flex-1 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2"
               >
                 <Inbox className="w-5 h-5" />
