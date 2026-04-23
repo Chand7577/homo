@@ -8032,45 +8032,33 @@ def doctor_rubric_repertorize(request):
             except Rubric.DoesNotExist:
                 return JsonResponse({'error': 'Chapter not found'}, status=404)
 
-        # ── Step 2: Multi-Stage Search ─────────────────────────────────────────
-        # Instead of one giant OR query, we search for each symptom part independently
-        # and collect the top candidates. This is much faster and handles multi-chapter cases better.
-        candidate_ids = set()
-        
-        # Optimize by tracking tokens we already searched
-        searched_tokens = set()
-        
+        # ── Step 2: Single-Pass Candidate Collection ───────────────────────────
+        # To avoid multiple full-table scans which cause timeouts, we collect all unique tokens
+        # and do exactly ONE database query to find the top candidates.
+        all_tokens = set()
         for sym_part in all_sub_symptoms:
             tokens = sentence_tokens.get(str(sym_part), [])
-            if not tokens: continue
-            
-            # Simple keyword search for this part
-            part_q = Q()
-            added_to_q = False
-            for tok in tokens:
-                if tok in searched_tokens:
-                    continue
-                searched_tokens.add(tok)
-                part_q |= (
+            all_tokens.update(tokens)
+
+        candidate_ids = set()
+        if all_tokens:
+            combined_q = Q()
+            for tok in all_tokens:
+                combined_q |= (
                     Q(name__icontains=tok) |
                     Q(name_hindi__icontains=tok) |
                     Q(synonyms__synonym__icontains=tok)
                 )
-                added_to_q = True
             
-            if not added_to_q:
-                continue
-                
-            # Get top 30 candidates for this specific symptom part
-            # Removed .distinct() to prevent full table scans and slow DB sorts.
-            # The python set `candidate_ids` will deduplicate the IDs safely.
-            part_matches = base_qs.filter(part_q).values_list('id', flat=True)[:30]
+            # Fetch up to 200 candidate IDs in ONE database query.
+            # This is extremely fast because it only scans the table once.
+            part_matches = base_qs.filter(combined_q).values_list('id', flat=True)[:200]
             candidate_ids.update(part_matches)
 
         if not candidate_ids:
             return JsonResponse({'success': True, 'total_matched': 0, 'top_rubrics': [], 'medicine_chart': [], 'symptoms_breakdown': []})
 
-        # Fetch full objects for the candidates. Here .distinct() is safe because candidate_ids is small.
+        # Fetch full objects for the candidates.
         matched_rubrics = base_qs.filter(id__in=candidate_ids).distinct()
 
         # ── Step 3: Score each matched rubric ──────────────
@@ -8273,4 +8261,4 @@ def doctor_rubric_repertorize(request):
         import traceback
         logger.error(traceback.format_exc())
         return JsonResponse({'error': f'Repertorization failed: {str(e)}'}, status=500)
-
+
