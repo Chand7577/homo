@@ -55,7 +55,8 @@ const Sidebar = () => {
         }
       }
     } catch (error) {
-      console.error("Failed to fetch inbox counts:", error);
+      // Silently ignore fetch errors to prevent console spam when backend is down/sleeping
+      // console.error("Failed to fetch inbox counts:", error);
     }
   };
 

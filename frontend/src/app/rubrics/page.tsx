@@ -167,6 +167,7 @@ export default function RubricsPage() {
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   
   const recognitionRef = useRef<any>(null);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -755,154 +756,152 @@ export default function RubricsPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-x-auto p-6 bg-gray-50/50">
-              <div className="flex gap-6 min-w-max h-full">
-                {(selectedChapters.length > 0 ? selectedChapters : identifiedChapters).map((chapter) => {
-                  const result = analysisResults[chapter.id];
-                  // Skip chapters with no results or empty rubrics
-                  if (!result || !result.top_rubrics?.length) return null;
-                  
-                  // Extract modalities from nested rubric structure (backend returns them inside top_rubrics[].modalities)
-                  const allRubrics = result.top_rubrics || [];
-                  
-                  // Extract synonym pairs (English + Hindi)
-                  const synonymPairs = Array.from(
-                    new Map(
-                      allRubrics.flatMap(r => (r.synonyms || []).map((s: any) => {
-                        const eng = typeof s === 'string' ? s : (s.synonym || s.name || "");
-                        const hi  = typeof s === 'object' ? (s.synonym_hindi || "") : "";
-                        return [eng, { eng, hi }];
-                      }).filter(([k]) => k))
-                    ).values()
-                  ).slice(0, 8);
+            <div className="flex-1 p-6 bg-gray-50/50 w-full overflow-hidden flex flex-col">
+              <div className="w-full h-full bg-white rounded-2xl border border-gray-200 shadow-sm overflow-y-auto">
+                <table className="w-full text-left text-sm table-fixed border-collapse">
+                  <thead className="sticky top-0 z-50 shadow-sm border-b border-indigo-200 bg-red-400">
+                    <tr>
+                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[8%]">Chapter</th>
+                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[12%]">Medicines</th>
+                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[60%]">Matched Rubrics</th>
+                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[12%]">Modalities</th>
+                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[8%] text-right">Synonyms</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 align-top bg-white">
+                    {(selectedChapters.length > 0 ? selectedChapters : identifiedChapters).map((chapter) => {
+                      const result = analysisResults[chapter.id];
+                      if (!result || !result.top_rubrics?.length) return null;
+                      
+                      const allRubrics = result.top_rubrics || [];
+                      const isExpanded = expandedRows.has(chapter.id);
+                      const visibleRubrics = isExpanded ? allRubrics : allRubrics.slice(0, 1);
 
-                  // Extract modality pairs with Hindi
-                  const aggravationPairs = Array.from(new Map(
-                    allRubrics.flatMap(r => (r.modalities?.aggravations || []).map((m: any) => [
-                      m.name, { eng: m.name, hi: m.name_hindi || "" }
-                    ]))
-                  ).values()).slice(0, 6);
+                      const synonymPairs = Array.from(
+                        new Map(
+                          allRubrics.flatMap(r => (r.synonyms || []).map((s: any) => {
+                            const eng = typeof s === 'string' ? s : (s.synonym || s.name || "");
+                            const hi  = typeof s === 'object' ? (s.synonym_hindi || "") : "";
+                            return [eng, { eng, hi }];
+                          }).filter(([k]) => k))
+                        ).values()
+                      ).slice(0, 8);
 
-                  const ameliorationPairs = Array.from(new Map(
-                    allRubrics.flatMap(r => (r.modalities?.ameliorations || []).map((m: any) => [
-                      m.name, { eng: m.name, hi: m.name_hindi || "" }
-                    ]))
-                  ).values()).slice(0, 6);
+                      const aggravationPairs = Array.from(new Map(
+                        allRubrics.flatMap(r => (r.modalities?.aggravations || []).map((m: any) => [
+                          m.name, { eng: m.name, hi: m.name_hindi || "" }
+                        ]))
+                      ).values()).slice(0, 6);
 
-                  return (
-                    <div key={chapter.id} className="w-[400px] bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
-                      {/* Chapter Header */}
-                      <div className="p-4 bg-indigo-600 text-white">
-                        <h3 className="text-lg font-black">{chapter.name}</h3>
-                        {chapter.name_hindi && (
-                          <p className="text-indigo-200 text-sm font-medium mt-0.5">{chapter.name_hindi}</p>
-                        )}
-                        <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-wider mt-1">{result.total_matched} rubrics matched</p>
-                      </div>
+                      const ameliorationPairs = Array.from(new Map(
+                        allRubrics.flatMap(r => (r.modalities?.ameliorations || []).map((m: any) => [
+                          m.name, { eng: m.name, hi: m.name_hindi || "" }
+                        ]))
+                      ).values()).slice(0, 6);
 
-                      <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-                        {/* Rubrics Match Section */}
-                        <section>
-                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                            <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                            TOP RUBRIC MATCHES
-                          </h4>
-                          <div className="space-y-3">
-                            {allRubrics.slice(0, 4).map(rb => (
-                              <div key={rb.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                <p className="text-xs font-bold text-gray-800 leading-tight">{rb.full_path || rb.name}</p>
-                                {rb.name_hindi && (
-                                  <p className="text-[10px] text-orange-500 font-medium mt-0.5">{rb.name_hindi}</p>
-                                )}
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {(rb.matched_symptoms || []).map((s: string, i: number) => (
-                                    <span key={i} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-bold border border-emerald-100">
-                                      {s}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
+                      return (
+                        <tr key={chapter.id} className="bg-white hover:bg-gray-50 transition-colors">
+                          {/* Chapter */}
+                          <td className="p-4 bg-white">
+                            <p className="font-bold text-gray-900">{chapter.name}</p>
+                            {chapter.name_hindi && <p className="text-xs text-indigo-600 mt-1">{chapter.name_hindi}</p>}
+                            <p className="text-[10px] font-bold text-gray-400 uppercase mt-2">{result.total_matched} matches</p>
+                          </td>
 
-                        {/* Modalities Section */}
-                        <section>
-                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                            <Activity className="w-3.5 h-3.5 text-purple-500" />
-                            MODALITIES
-                          </h4>
-                          {aggravationPairs.length > 0 && (
-                            <div className="mb-2">
-                              <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider mb-1.5">⬆ Aggravated by</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {aggravationPairs.map((m, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-red-50 text-red-700 rounded-lg text-[10px] font-semibold border border-red-100">
-                                    {m.eng}{m.hi && <span className="text-red-400 ml-1">· {m.hi}</span>}
+                          {/* Medicine */}
+                          <td className="p-4 bg-white">
+                            <div className="flex flex-col gap-2">
+                              {result.medicine_chart.slice(0, 4).map((med) => (
+                                <div key={med.id} className="flex justify-between items-start gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-gray-800 leading-tight break-words">{med.name}</p>
+                                  </div>
+                                  <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                                    {med.occurrences}
                                   </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {ameliorationPairs.length > 0 && (
-                            <div>
-                              <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-1.5">⬇ Ameliorated by</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {ameliorationPairs.map((m, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] font-semibold border border-emerald-100">
-                                    {m.eng}{m.hi && <span className="text-emerald-500 ml-1">· {m.hi}</span>}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {aggravationPairs.length === 0 && ameliorationPairs.length === 0 && (
-                            <p className="text-xs text-gray-400 italic">No specific modalities found</p>
-                          )}
-                        </section>
-
-                        {/* Synonyms Section */}
-                        <section>
-                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                            <Tag className="w-3.5 h-3.5 text-amber-500" />
-                            SYNONYMS
-                          </h4>
-                          <div className="flex flex-wrap gap-2">
-                            {synonymPairs.length > 0 ? synonymPairs.map((s, i) => (
-                              <span key={i} className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold border border-amber-100">
-                                {s.eng}
-                                {s.hi && <span className="text-orange-400 ml-1 font-normal">· {s.hi}</span>}
-                              </span>
-                            )) : (
-                              <p className="text-xs text-gray-400 italic">No synonyms found</p>
-                            )}
-                          </div>
-                        </section>
-
-                        {/* Medicines Section */}
-                        <section>
-                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                            <Pill className="w-3.5 h-3.5 text-rose-500" />
-                            INDICATED MEDICINES
-                          </h4>
-                          <div className="space-y-2">
-                            {result.medicine_chart.slice(0, 5).map((med, i) => (
-                              <div key={med.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100 hover:border-rose-200 transition-all">
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold text-gray-800 truncate">{med.name}</p>
-                                  <p className="text-[9px] text-gray-400 italic truncate">{med.latin_name}</p>
                                 </div>
-                                <div className="text-right flex-shrink-0">
-                                  <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{med.occurrences} Rubrics</span>
+                              ))}
+                            </div>
+                          </td>
+
+                          {/* Matched Rubrics */}
+                          <td className="p-4 bg-white">
+                            <div className="flex flex-col gap-3">
+                              {visibleRubrics.map(rb => (
+                                <div key={rb.id} className="bg-gray-50 rounded-lg p-3 border border-gray-100 shadow-sm">
+                                  <p className="text-sm md:text-base font-bold text-gray-800 leading-snug break-words">{rb.full_path || rb.name}</p>
+                                  {rb.name_hindi && <p className="text-xs text-orange-600 mt-1 break-words">{rb.name_hindi}</p>}
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-                      </div>
-                    </div>
-                  );
-                })}
+                              ))}
+                              {allRubrics.length > 1 && (
+                                <button 
+                                  onClick={() => {
+                                    setExpandedRows(prev => {
+                                      const next = new Set(prev);
+                                      if (isExpanded) next.delete(chapter.id);
+                                      else next.add(chapter.id);
+                                      return next;
+                                    });
+                                  }}
+                                  className="self-start px-3 py-1.5 mt-1 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                                >
+                                  {isExpanded ? "Show Less" : `+ ${allRubrics.length - 1} more rubrics`}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Modalities */}
+                          <td className="p-4 bg-white">
+                            <div className="flex flex-col gap-3">
+                              {aggravationPairs.length > 0 && (
+                                <div>
+                                  <p className="text-[9px] font-bold text-red-700 uppercase tracking-wider mb-1">⬆ Aggravates</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {aggravationPairs.map((m, i) => (
+                                      <span key={i} className="px-1.5 py-0.5 bg-red-100 text-red-900 rounded text-[10px] border border-red-200 inline-block break-words">
+                                        {m.eng}{m.hi && <span className="text-red-600 ml-1">· {m.hi}</span>}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {ameliorationPairs.length > 0 && (
+                                <div>
+                                  <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider mb-1">⬇ Ameliorates</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {ameliorationPairs.map((m, i) => (
+                                      <span key={i} className="px-1.5 py-0.5 bg-emerald-100 text-emerald-900 rounded text-[10px] border border-emerald-200 inline-block break-words">
+                                        {m.eng}{m.hi && <span className="text-emerald-700 ml-1">· {m.hi}</span>}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {aggravationPairs.length === 0 && ameliorationPairs.length === 0 && (
+                                <p className="text-xs text-gray-400 italic">None</p>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Synonyms */}
+                          <td className="p-4 align-top text-right bg-white">
+                            <div className="flex flex-wrap gap-1 justify-end">
+                              {synonymPairs.length > 0 ? synonymPairs.map((s, i) => (
+                                <span key={i} className="px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded text-[10px] border border-amber-200 inline-block break-words font-semibold">
+                                  {s.eng}
+                                  {s.hi && <span className="text-amber-700 ml-1 font-normal">· {s.hi}</span>}
+                                </span>
+                              )) : (
+                                <p className="text-xs text-gray-400 italic">None</p>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
 
