@@ -20,7 +20,7 @@ import {
   Calendar,
   ArrowRight,
   X,
-  Check,
+  Check, i
   ChevronDown,
   Stethoscope,
   Sparkles,

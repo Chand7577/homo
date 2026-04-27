@@ -7,11 +7,91 @@ import {
   ChevronDown, Tag, Loader2, BarChart3, Trophy, AlertCircle,
   CheckCircle2, ArrowLeft, Zap, Filter, Star, Activity,
   Hash, Info, Table2, FlaskConical, Microscope, Mic, MicOff,
-  PlusCircle
+  PlusCircle, Layers
 } from "lucide-react";
 import RubricModal from "../../components/RubricModal";
 
 const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+
+// ─── Inverted Index: keyword → candidate chapter names ───────────────────────
+// Resolves symptoms to chapters entirely client-side for known terms.
+// This eliminates probe API calls for the vast majority of symptoms.
+const KEYWORD_INDEX: Record<string, string[]> = {
+  // MIND
+  anger:"MIND",anxiety:"MIND",fear:"MIND",grief:"MIND",sad:"MIND",depression:"MIND",
+  irritab:"MIND",mental:"MIND",worry:"MIND",confusion:"MIND",memory:"MIND",
+  delusion:"MIND",insanity:"MIND",weeping:"MIND",jealous:"MIND",indifference:"MIND",
+  restless:"MIND",contradiction:"MIND",forgetful:"MIND",aversion:"MIND",
+  // HINDI MIND
+  "मन":"MIND","डर":"MIND","गुस्सा":"MIND","दुख":"MIND","चिंता":"MIND",
+  // HEAD
+  headache:"HEAD",head:"HEAD",migraine:"HEAD",vertigo:"HEAD",dizz:"HEAD",scalp:"HEAD",
+  forehead:"HEAD",temple:"HEAD",occiput:"HEAD",
+  "सिर":"HEAD","माथा":"HEAD",
+  // EYES
+  eye:"EYES",vision:"EYES",sight:"EYES",cornea:"EYES",conjunctiv:"EYES",
+  lachrymation:"EYES",photophobia:"EYES","आँख":"EYES",
+  // EARS
+  ear:"EARS",hearing:"EARS",tinnitus:"EARS",deafness:"EARS",otitis:"EARS",
+  "कान":"EARS",
+  // NOSE
+  nose:"NOSE",nasal:"NOSE",sneezing:"NOSE",rhinitis:"NOSE",coryza:"NOSE",
+  "नाक":"NOSE",
+  // MOUTH
+  mouth:"MOUTH",tongue:"MOUTH",lips:"MOUTH",saliva:"MOUTH",aphthae:"MOUTH",
+  "मुँह":"MOUTH",
+  // TEETH
+  teeth:"TEETH",tooth:"TEETH",gum:"TEETH",dental:"TEETH",caries:"TEETH",
+  "दाँत":"TEETH","मसूड़":"TEETH",
+  // THROAT
+  throat:"THROAT",tonsil:"THROAT",swallow:"THROAT",pharynx:"THROAT",hoarse:"THROAT",
+  "गला":"THROAT",
+  // STOMACH
+  stomach:"STOMACH",nausea:"STOMACH",vomit:"STOMACH",gastric:"STOMACH",
+  appetite:"STOMACH",thirst:"STOMACH",hunger:"STOMACH",eructation:"STOMACH",
+  heartburn:"STOMACH","पेट":"STOMACH","भूख":"STOMACH","प्यास":"STOMACH",
+  // ABDOMEN
+  abdomen:"ABDOMEN",abdominal:"ABDOMEN",belly:"ABDOMEN",intestine:"ABDOMEN",
+  bowel:"ABDOMEN",colic:"ABDOMEN",cramp:"ABDOMEN",bloat:"ABDOMEN",distension:"ABDOMEN",
+  flatulence:"ABDOMEN","पेड़ू":"ABDOMEN","आँत":"ABDOMEN",
+  // RECTUM
+  stool:"RECTUM",constipat:"RECTUM",diarrhea:"RECTUM",rectal:"RECTUM",
+  hemorrhoid:"RECTUM",piles:"RECTUM",dysentery:"RECTUM",
+  "कब्ज":"RECTUM","दस्त":"RECTUM",
+  // URINARY
+  urine:"URINARY ORGANS",urinary:"URINARY ORGANS",kidney:"URINARY ORGANS",
+  bladder:"URINARY ORGANS",dysuria:"URINARY ORGANS","पेशाब":"URINARY ORGANS",
+  // CHEST
+  chest:"CHEST",lung:"CHEST",heart:"CHEST",palpitat:"CHEST",breast:"CHEST",
+  "छाती":"CHEST","हृदय":"CHEST",
+  // RESPIRATION
+  breath:"RESPIRATION",breathe:"RESPIRATION",asthma:"RESPIRATION",
+  wheez:"RESPIRATION",dyspnea:"RESPIRATION","साँस":"RESPIRATION",
+  // COUGH
+  cough:"COUGH","खाँसी":"COUGH",
+  // BACK
+  back:"BACK",spine:"BACK",lumbar:"BACK",sacrum:"BACK",sciatica:"BACK",
+  "पीठ":"BACK",
+  // EXTREMITIES
+  leg:"EXTREMITIES",arm:"EXTREMITIES",joint:"EXTREMITIES",knee:"EXTREMITIES",
+  ankle:"EXTREMITIES",hand:"EXTREMITIES",foot:"EXTREMITIES",feet:"EXTREMITIES",
+  elbow:"EXTREMITIES",shoulder:"EXTREMITIES",wrist:"EXTREMITIES",hip:"EXTREMITIES",
+  rheumatism:"EXTREMITIES",arthritis:"EXTREMITIES",
+  "हाथ":"EXTREMITIES","पैर":"EXTREMITIES",
+  // SKIN
+  skin:"SKIN",rash:"SKIN",eruption:"SKIN",itch:"SKIN",eczema:"SKIN",
+  urticaria:"SKIN",psoriasis:"SKIN",acne:"SKIN",hive:"SKIN",
+  "त्वचा":"SKIN","खुजली":"SKIN",
+  // FEVER
+  fever:"FEVER",temperature:"FEVER",chill:"FEVER",ague:"FEVER",
+  "बुखार":"FEVER",
+  // SLEEP
+  sleep:"SLEEP",insomnia:"SLEEP",somnambulism:"SLEEP","नींद":"SLEEP",
+  // GENERALITIES — low-priority fallback, must not outcompete specific chapters
+  weakness:"GENERALITIES",fatigue:"GENERALITIES",weight:"GENERALITIES",
+  perspiration:"GENERALITIES",sweat:"GENERALITIES",
+  "कमज़ोरी":"GENERALITIES","पसीना":"GENERALITIES",
+} as Record<string, string>;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Chapter { id: number; name: string; name_hindi?: string; }
@@ -20,6 +100,8 @@ interface RubricEntry {
   id: number; name: string; name_hindi?: string;
   full_path?: string; score: number;
   medicine_count: number;
+  modality?: string;
+  synonyms?: (string | { synonym: string; synonym_hindi?: string; name?: string })[];
   medicines: { id: number; name: string; latin_name: string; grade: number; grade_label: string }[];
 }
 
@@ -55,28 +137,42 @@ const GRADE_COLORS = ["", "bg-slate-100 text-slate-600", "bg-blue-100 text-blue-
   "bg-teal-100 text-teal-700", "bg-violet-100 text-violet-800", "bg-amber-100 text-amber-700"];
 
 export default function RubricsPage() {
-  const [stage, setStage] = useState<"chapter" | "symptoms" | "results">("chapter");
+  const [stage, setStage] = useState<"selection" | "analysis">("selection");
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
-  const [symptoms, setSymptoms] = useState<string[]>([]);
-  const [symptomInput, setSymptomInput] = useState("");
-  const [result, setResult] = useState<RepertoResult | null>(null);
+  const [selectedChapters, setSelectedChapters] = useState<Chapter[]>([]);
+  const [chapterSearch, setChapterSearch] = useState("");
+  
+  // Per-chapter symptoms: Map<chapterId, string[]>
+  const [chapterSymptoms, setChapterSymptoms] = useState<Record<number, string[]>>({});
+  // Per-chapter inputs: Map<chapterId, string>
+  const [chapterInputs, setChapterInputs] = useState<Record<number, string>>({});
+  
+  // Results: Map<chapterId, RepertoResult>
+  const [analysisResults, setAnalysisResults] = useState<Record<number, RepertoResult>>({});
+  
+  const [globalSymptoms, setGlobalSymptoms] = useState<string[]>([]);
+  const [globalInput, setGlobalInput] = useState("");
+  const [identifiedChapters, setIdentifiedChapters] = useState<Chapter[]>([]);
+  
   const [loading, setLoading] = useState(false);
   const [chapterLoading, setChapterLoading] = useState(true);
   const [error, setError] = useState("");
-  const [chapterSearch, setChapterSearch] = useState("");
-  const [expandedRubricCell, setExpandedRubricCell] = useState<string | null>(null); // "rowIdx-rubricIdx"
-  const [isListening, setIsListening] = useState(false);
-  const [dictationLang, setDictationLang] = useState<"en-IN" | "hi-IN">("en-IN");
   
-  // Rubric Modal state
+  const [isListening, setIsListening] = useState(false);
+  const [listeningChapterId, setListeningChapterId] = useState<number | null>(null);
+  const [dictationLang, setDictationLang] = useState<"en-IN" | "hi-IN">("en-IN");
+  const [isGlobalListening, setIsGlobalListening] = useState(false);
+  
   const [isRubricModalOpen, setIsRubricModalOpen] = useState(false);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   
-  // Setup SpeechRecognition hook
   const recognitionRef = useRef<any>(null);
-  
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  // Probe cache: symptom string → identified root chapter name
+  // Persists across analyses in the same session — avoids repeat API probes.
+  const probeCache = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     fetch(`${API_BASE}/doctor/rubrics/chapters/`, { credentials: "include" })
@@ -85,7 +181,6 @@ export default function RubricsPage() {
       .catch(() => setError("Failed to load chapters"))
       .finally(() => setChapterLoading(false));
       
-    // Initialize speech recognition
     if (typeof window !== "undefined") {
       const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
@@ -95,23 +190,48 @@ export default function RubricsPage() {
         
         recognitionRef.current.onresult = (event: any) => {
           const transcript = event.results[0][0].transcript;
-          setSymptomInput(prev => prev ? prev + " " + transcript : transcript);
+          if (listeningChapterId !== null) {
+            // Chapter-specific dictation
+            setChapterInputs(prev => ({
+              ...prev,
+              [listeningChapterId]: (prev[listeningChapterId] || "") + " " + transcript
+            }));
+          } else {
+            // Global dictation — append to global input
+            setGlobalInput(prev => (prev ? prev + " " + transcript : transcript).trim());
+          }
           setIsListening(false);
-          // Let the user press 'Enter' explicitly to add, rather than auto-adding.
+          setIsGlobalListening(false);
+          setListeningChapterId(null);
         };
         
-        recognitionRef.current.onerror = () => {
-          setIsListening(false);
-        };
-        
-        recognitionRef.current.onend = () => {
-          setIsListening(false);
-        };
+        recognitionRef.current.onerror = () => { setIsListening(false); setIsGlobalListening(false); setListeningChapterId(null); };
+        recognitionRef.current.onend   = () => { setIsListening(false); setIsGlobalListening(false); setListeningChapterId(null); };
       }
     }
-  }, []);
+  }, [listeningChapterId]);
 
-  const toggleListening = () => {
+  const toggleGlobalListening = () => {
+    if (!recognitionRef.current) {
+      alert("Voice recognition is not supported in this browser. Please use Chrome.");
+      return;
+    }
+    if (isGlobalListening) {
+      recognitionRef.current.stop();
+      setIsGlobalListening(false);
+    } else {
+      try {
+        recognitionRef.current.lang = dictationLang;
+        recognitionRef.current.start();
+        setIsGlobalListening(true);
+        setListeningChapterId(null); // Ensure global mode
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const toggleListening = (chapterId: number) => {
     if (!recognitionRef.current) {
       alert("Voice recognition is not supported in this browser. Try Chrome.");
       return;
@@ -120,47 +240,210 @@ export default function RubricsPage() {
     if (isListening) {
       recognitionRef.current.stop();
       setIsListening(false);
+      setListeningChapterId(null);
     } else {
       try {
         recognitionRef.current.lang = dictationLang;
         recognitionRef.current.start();
         setIsListening(true);
+        setListeningChapterId(chapterId);
       } catch (e) {
         console.error(e);
       }
     }
   };
 
-  const addSymptom = () => {
-    const v = symptomInput.trim().toLowerCase();
-    if (!v || symptoms.includes(v)) { setSymptomInput(""); return; }
-    setSymptoms(p => [...p, v]);
-    setSymptomInput("");
-    inputRef.current?.focus();
+  const toggleChapterSelection = (chapter: Chapter) => {
+    setSelectedChapters(prev => {
+      const exists = prev.find(c => c.id === chapter.id);
+      if (exists) {
+        const next = prev.filter(c => c.id !== chapter.id);
+        // Clean up symptoms/inputs
+        const newSymptoms = { ...chapterSymptoms };
+        const newInputs = { ...chapterInputs };
+        delete newSymptoms[chapter.id];
+        delete newInputs[chapter.id];
+        setChapterSymptoms(newSymptoms);
+        setChapterInputs(newInputs);
+        return next;
+      }
+      if (prev.length >= 3) return prev;
+      return [...prev, chapter];
+    });
+    // Auto-close sidebar after selection/deselection
+    setIsSidebarExpanded(false);
   };
 
-  const removeSymptom = (i: number) => setSymptoms(p => p.filter((_, idx) => idx !== i));
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addSymptom(); }
-    else if (e.key === "Backspace" && !symptomInput && symptoms.length) removeSymptom(symptoms.length - 1);
+  const addSymptom = (chapterId: number) => {
+    const v = (chapterInputs[chapterId] || "").trim().toLowerCase();
+    if (!v) return;
+    
+    setChapterSymptoms(prev => {
+      const current = prev[chapterId] || [];
+      if (current.includes(v)) return prev;
+      return { ...prev, [chapterId]: [...current, v] };
+    });
+    setChapterInputs(prev => ({ ...prev, [chapterId]: "" }));
+    inputRefs.current[chapterId]?.focus();
   };
 
-  const runRepertorize = async () => {
-    if (!symptoms.length) { setError("Add at least one symptom."); return; }
-    setError(""); setLoading(true); setResult(null);
+  const removeSymptom = (chapterId: number, index: number) => {
+    setChapterSymptoms(prev => ({
+      ...prev,
+      [chapterId]: (prev[chapterId] || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, chapterId: number) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addSymptom(chapterId);
+    } else if (e.key === "Backspace" && !(chapterInputs[chapterId]) && (chapterSymptoms[chapterId]?.length)) {
+      removeSymptom(chapterId, (chapterSymptoms[chapterId]?.length || 0) - 1);
+    }
+  };
+
+  const runAnalysis = async () => {
+    const hasManualSelection = selectedChapters.length > 0;
+    const symsToAnalyze = hasManualSelection
+      ? selectedChapters.flatMap(c => chapterSymptoms[c.id] || [])
+      : globalSymptoms;
+
+    if (symsToAnalyze.length === 0) {
+      setError("Add at least one symptom to analyze.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+    const newResults: Record<number, RepertoResult> = {};
+
     try {
-      const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chapter_id: selectedChapter?.id ?? null, symptoms, top_n: 3 }),
-      });
-      const data: RepertoResult = await res.json();
-      if (!res.ok || !data.success) throw new Error((data as any).error || "Failed");
-      setResult(data);
-      setStage("results");
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
+      if (hasManualSelection) {
+        // ── Manual mode: query each selected chapter directly ───────────────
+        await Promise.all(
+          selectedChapters
+            .filter(c => (chapterSymptoms[c.id]?.length || 0) > 0)
+            .map(async (chapter) => {
+              const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
+                method: "POST", credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chapter_id: chapter.id, symptoms: chapterSymptoms[chapter.id], top_n: 8 }),
+              });
+              const data = await res.json();
+              if (res.ok && data.success) newResults[chapter.id] = data;
+            })
+        );
+      } else {
+        // ── Global mode: fast chapter identification ──────────────────────────
+        //
+        // STEP 1: Score chapters using the local KEYWORD_INDEX (O(words) per symptom).
+        //         For any symptom whose words are ALL unknown to the index,
+        //         fall back to an API probe — and cache that result.
+        const chapterSymMap: Record<number, { chapter: Chapter; syms: string[] }> = {};
+
+        const resolveChapterName = async (sym: string): Promise<string | null> => {
+          // Check probe cache first
+          if (probeCache.current.has(sym)) return probeCache.current.get(sym)!;
+
+          // Tokenize symptom
+          const tokens = sym.toLowerCase().split(/[\s,]+/).filter(t => t.length >= 3);
+          
+          // Score each token against the keyword index
+          const scores: Record<string, number> = {};
+          for (const token of tokens) {
+            // Exact match — GENERALITIES gets lower base score
+            if (KEYWORD_INDEX[token]) {
+              const weight = (KEYWORD_INDEX[token] === "GENERALITIES") ? 5 : 10;
+              scores[KEYWORD_INDEX[token]] = (scores[KEYWORD_INDEX[token]] || 0) + weight;
+              continue;
+            }
+            // Prefix / substring match (handles plural, conjugations)
+            for (const [kw, chName] of Object.entries(KEYWORD_INDEX)) {
+              if (token.includes(kw) || kw.includes(token)) {
+                // GENERALITIES gets a lower weight so specific chapters always beat it in ties
+                const weight = (chName === "GENERALITIES") ? 3 : 6;
+                scores[chName as string] = (scores[chName as string] || 0) + weight;
+              }
+            }
+          }
+
+          if (Object.keys(scores).length > 0) {
+            // Pick the highest scoring chapter
+            const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+            probeCache.current.set(sym, best);
+            return best;
+          }
+
+          // Fallback: single API probe (only for completely unknown terms)
+          try {
+            const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
+              method: "POST", credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ symptoms: [sym], top_n: 1 }),
+            });
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (!data.success || !data.top_rubrics?.length) return null;
+            const rootName = (data.top_rubrics[0].full_path || "").split(">")[0].trim();
+            probeCache.current.set(sym, rootName); // Cache for next time
+            return rootName;
+          } catch {
+            return null;
+          }
+        };
+
+        // Resolve all symptoms in parallel
+        const resolved = await Promise.all(
+          globalSymptoms.map(async sym => ({ sym, rootName: await resolveChapterName(sym) }))
+        );
+
+        // Group symptoms by matched chapter
+        for (const { sym, rootName } of resolved) {
+          if (!rootName) continue;
+          const matched = chapters.find(ch =>
+            ch.name.toLowerCase() === rootName.toLowerCase() ||
+            ch.name.toLowerCase().includes(rootName.toLowerCase()) ||
+            rootName.toLowerCase().includes(ch.name.toLowerCase())
+          );
+          if (!matched) continue;
+          if (!chapterSymMap[matched.id]) chapterSymMap[matched.id] = { chapter: matched, syms: [] };
+          chapterSymMap[matched.id].syms.push(sym);
+        }
+
+        const chaptersToQuery = Object.values(chapterSymMap).slice(0, 3);
+        if (chaptersToQuery.length === 0) {
+          setError("Could not identify relevant chapters. Try more specific keywords.");
+          return;
+        }
+        setIdentifiedChapters(chaptersToQuery.map(c => c.chapter));
+
+        // STEP 2: Query each identified chapter (parallel, all use real IDs)
+        await Promise.all(
+          chaptersToQuery.map(async ({ chapter, syms }) => {
+            const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
+              method: "POST", credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chapter_id: chapter.id, symptoms: syms, top_n: 8 }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) newResults[chapter.id] = data;
+          })
+        );
+      }
+
+      if (Object.keys(newResults).length === 0) {
+        setError("No rubric matches found. Try different symptom keywords.");
+        return;
+      }
+
+      setAnalysisResults(newResults);
+      setIsAnalysisModalOpen(true);
+    } catch (e: any) {
+      setError("Analysis failed: " + (e.message || "Network error."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredChapters = chapters.filter(c =>
@@ -168,7 +451,6 @@ export default function RubricsPage() {
     (c.name_hindi || "").toLowerCase().includes(chapterSearch.toLowerCase())
   );
 
-  const maxChartScore = result?.medicine_chart[0]?.score || 1;
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
@@ -183,578 +465,459 @@ export default function RubricsPage() {
         .pulse-ring { animation: pulseRing 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
         @keyframes pulseRing { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(2.4); opacity: 0; } }
         .bar-fill { transition: width 1.1s cubic-bezier(.34,1.56,.64,1); }
-        /* Table styles */
-        .rep-table { width:100%; border-collapse:separate; border-spacing:0; }
-        .rep-table th { background:#f8fafc; font-weight:700; font-size:11px;
-          text-transform:uppercase; letter-spacing:.06em; color:#64748b;
-          padding:10px 14px; border-bottom:2px solid #e2e8f0; text-align:left; }
-        .rep-table td { padding:12px 14px; vertical-align:top; border-bottom:1px solid #f1f5f9; }
-        .rep-table tr:last-child td { border-bottom:none; }
-        .rep-table tr:hover td { background:#fafbff; }
-        .rubric-pill { display:inline-flex; align-items:center; gap:4px;
-          padding:3px 8px; border-radius:6px; font-size:11px; font-weight:600;
-          background:#eff6ff; color:#3b82f6; border:1px solid #bfdbfe;
-          cursor:pointer; margin:2px; white-space:nowrap; max-width:220px; }
-        .rubric-pill:hover { background:#dbeafe; }
-        .med-chip { display:inline-flex; align-items:center; gap:3px;
-          padding:2px 7px; border-radius:5px; font-size:10px; font-weight:600;
-          margin:2px; }
-        ::-webkit-scrollbar { width:5px; height:5px; }
-        ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:10px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+        .animate-shake { animation: shake 0.2s ease-in-out 0s 2; }
         .chapter-card { transition:all .18s ease; }
         .chapter-card:hover { transform:translateY(-2px); box-shadow:0 4px 20px rgba(0,0,0,.1); }
       `}</style>
       
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-[1600px] mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button onClick={() => window.history.back()}
               className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
               <ArrowLeft className="w-4 h-4 text-gray-500" />
             </button>
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center">
-                <Table2 className="w-3.5 h-3.5 text-white" />
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <Table2 className="w-4 h-4 text-white" />
               </div>
               <div>
-                <h1 className="text-gray-900 font-bold text-sm leading-none">Rubric Repertorization</h1>
-                <p className="text-gray-400 text-[10px] mt-0.5">Chapter → Symptoms → Analysis Table</p>
+                <h1 className="text-gray-900 font-bold text-lg leading-none">Global Repertory Analysis</h1>
+                <p className="text-gray-400 text-xs mt-0.5">Enter symptoms below to automatically identify chapters</p>
               </div>
             </div>
           </div>
 
-          {/* Step pills */}
-          <div className="hidden sm:flex items-center gap-1">
-            {[["chapter","1","Chapter"],["symptoms","2","Symptoms"],["results","3","Results"]].map(([key,num,label],i) => {
-              const done = (key==="chapter"&&(stage==="symptoms"||stage==="results"))||(key==="symptoms"&&stage==="results");
-              const active = stage===key;
-              return (
-                <div key={key} className="flex items-center gap-1">
-                  {i>0&&<div className="w-6 h-px bg-gray-200"/>}
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
-                    done ? "bg-emerald-50 text-emerald-600" : active ? "bg-sky-50 text-sky-600" : "text-gray-400"}`}>
-                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black ${
-                      done ? "bg-emerald-500 text-white" : active ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-500"}`}>
-                      {done?"✓":num}
-                    </span>
-                    {label}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {selectedChapter && (
-            <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg max-w-[160px]">
-              <BookOpen className="w-3.5 h-3.5 text-sky-500 flex-shrink-0"/>
-              <span className="text-xs text-gray-700 font-semibold truncate">{selectedChapter.name}</span>
-              <button onClick={() => { setSelectedChapter(null); setStage("chapter"); setResult(null); setSymptoms([]); }}
-                className="w-3.5 h-3.5 rounded-full bg-gray-300 hover:bg-red-400 flex items-center justify-center flex-shrink-0 transition-colors">
-                <X className="w-2.5 h-2.5 text-white"/>
-              </button>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {selectedChapters.length > 0 && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100">
+                <BookOpen className="w-3.5 h-3.5" />
+                {selectedChapters.length}/3 Chapters Selected
+              </div>
+            )}
             <button 
               onClick={() => setIsRubricModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-700 transition-all active:scale-95 shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
             >
-              <PlusCircle className="w-3.5 h-3.5" />
+              <PlusCircle className="w-3.5 h-3.5 text-indigo-500" />
               ADD RUBRIC
+            </button>
+            <button 
+              onClick={runAnalysis}
+              disabled={loading || (selectedChapters.length === 0 && globalSymptoms.length === 0)}
+              className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              ANALYZE
             </button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-6">
+      <div className="max-w-[1600px] mx-auto flex h-[calc(100vh-64px)] overflow-hidden">
+        
 
-        {/* ══════════════════════════════════════════════════════════════════
-            STAGE 1 · Chapter Selection
-        ══════════════════════════════════════════════════════════════════ */}
-        {stage === "chapter" && (
-          <div className="py-8 fade-in">
-            <div className="mb-8 text-center">
-              <p className="text-xs font-bold text-sky-500 uppercase tracking-widest mb-2">Step 1 of 3</p>
-              <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-2">Select a Chapter</h2>
-              <p className="text-gray-500 text-sm max-w-md mx-auto">
-                Choose the repertory chapter for the patient's chief complaint region.
-              </p>
+
+        {/* MAIN AREA: 3 Columns */}
+        <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col p-6">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-700 text-sm font-medium animate-shake">
+              <AlertCircle className="w-5 h-5" />
+              {error}
+              <button onClick={() => setError("")} className="ml-auto text-red-400 hover:text-red-600"><X className="w-4 h-4"/></button>
             </div>
+          )}
 
-            <div className="max-w-md mx-auto mb-6">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-                <input type="text" placeholder="Search chapters…" value={chapterSearch}
-                  onChange={e => setChapterSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30 bg-white"/>
+          {selectedChapters.length === 0 ? (
+            <div className="flex-1 flex flex-col p-8 bg-white rounded-3xl border border-gray-200 shadow-sm mx-auto w-full max-w-5xl">
+              <div className="flex items-start justify-between mb-8">
+                <div>
+                  <h3 className="text-3xl font-black text-gray-900 mb-2 flex items-center gap-3">
+                    <Sparkles className="w-8 h-8 text-indigo-500" />
+                    Global Symptom Entry
+                  </h3>
+                  <p className="text-gray-500 max-w-md">Type all patient symptoms below. The system will automatically detect the relevant repertory chapters.</p>
+                </div>
+                <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                  <Activity className="w-8 h-8 text-indigo-500" />
+                </div>
               </div>
-            </div>
+              
+              <div className="w-full space-y-8">
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-15 group-focus-within:opacity-30 transition duration-1000 group-focus-within:duration-200"></div>
+                  <div className="relative flex items-center gap-4 bg-white p-5 rounded-2xl border-2 border-gray-100 focus-within:border-indigo-500 transition-all shadow-sm">
+                    <Search className="w-6 h-6 text-gray-300" />
+                    <input 
+                      type="text" 
+                      placeholder="Enter a symptom (e.g. Headache in evening, thirst for cold water)..." 
+                      value={globalInput}
+                      onChange={e => setGlobalInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && globalInput.trim()) {
+                          setGlobalSymptoms(prev => [...prev, globalInput.trim()]);
+                          setGlobalInput("");
+                        }
+                      }}
+                      className="flex-1 bg-transparent border-none outline-none text-xl font-medium placeholder:text-gray-300"
+                    />
+                    {/* Language toggle */}
+                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1">
+                      <button
+                        onClick={() => setDictationLang("en-IN")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${dictationLang === "en-IN" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                      >
+                        EN
+                      </button>
+                      <button
+                        onClick={() => setDictationLang("hi-IN")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${dictationLang === "hi-IN" ? "bg-white text-orange-500 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                      >
+                        हि
+                      </button>
+                    </div>
 
-            {chapterLoading ? (
-              <div className="flex flex-col items-center py-20">
-                <Loader2 className="w-8 h-8 text-sky-500 animate-spin mb-3"/>
-                <p className="text-gray-400 text-sm">Loading chapters…</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                {filteredChapters.map(ch => (
-                  <button key={ch.id} onClick={() => { setSelectedChapter(ch); setStage("symptoms"); setSymptoms([]); setResult(null); setError(""); }}
-                    className="chapter-card bg-white border border-gray-200 rounded-2xl p-4 text-left hover:border-sky-300 group">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-50 to-indigo-50 border border-sky-100 flex items-center justify-center mb-3 group-hover:from-sky-100 group-hover:to-indigo-100 transition-all">
-                      <BookOpen className="w-4.5 h-4.5 text-sky-500"/>
-                    </div>
-                    <p className="text-gray-900 font-bold text-sm leading-tight">{ch.name}</p>
-                    {ch.name_hindi && <p className="text-orange-500 text-xs mt-1">{ch.name_hindi}</p>}
-                    <div className="flex items-center gap-1 mt-2 text-sky-400 text-[10px] font-bold uppercase tracking-wide group-hover:text-sky-600 transition-colors">
-                      Select <ChevronRight className="w-3 h-3"/>
-                    </div>
-                  </button>
-                ))}
-                {!filteredChapters.length && (
-                  <div className="col-span-full text-center py-16 text-gray-400 text-sm">No chapters match</div>
+                    {/* Microphone button */}
+                    <button
+                      onClick={toggleGlobalListening}
+                      title={isGlobalListening ? "Stop listening" : `Speak in ${dictationLang === "hi-IN" ? "Hindi" : "English"}`}
+                      className={`relative p-3 rounded-xl transition-all ${
+                        isGlobalListening
+                          ? "bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse"
+                          : "bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600"
+                      }`}
+                    >
+                      {isGlobalListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                      {isGlobalListening && (
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-ping" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (globalInput.trim()) {
+                          setGlobalSymptoms(prev => [...prev, globalInput.trim()]);
+                          setGlobalInput("");
+                        }
+                      }}
+                      className="px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-black transition-all shadow-lg font-bold text-sm"
+                    >
+                      ADD
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">ADDED SYMPTOMS ({globalSymptoms.length})</h4>
+                  <div className="flex flex-wrap gap-3">
+                    {globalSymptoms.map((sym, idx) => (
+                      <div key={idx} className="group flex items-center gap-3 px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white hover:border-indigo-300 hover:shadow-md transition-all animate-in slide-in-from-top-2">
+                        <Tag className="w-4 h-4 text-indigo-400" />
+                        <span className="text-sm font-bold text-gray-800">{sym}</span>
+                        <button onClick={() => setGlobalSymptoms(prev => prev.filter((_, i) => i !== idx))} className="ml-2">
+                          <X className="w-4 h-4 text-gray-300 group-hover:text-red-500 transition-colors" />
+                        </button>
+                      </div>
+                    ))}
+                    {globalSymptoms.length === 0 && (
+                      <div className="w-full py-12 border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center opacity-40">
+                        <Pill className="w-10 h-10 text-gray-300 mb-3" />
+                        <p className="text-sm font-medium text-gray-400">Start by typing a symptom above</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {globalSymptoms.length > 0 && (
+                  <div className="pt-6 border-t border-gray-100 flex justify-end">
+                    <button 
+                      onClick={runAnalysis}
+                      disabled={loading}
+                      className="group relative flex items-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95"
+                    >
+                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5 group-hover:animate-pulse" />}
+                      RUN FULL ANALYSIS
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* ══════════════════════════════════════════════════════════════════
-            STAGE 2 · Symptom Entry
-        ══════════════════════════════════════════════════════════════════ */}
-        {stage === "symptoms" && (
-          <div className="py-8 fade-in">
-            <div className="mb-8 text-center">
-              <p className="text-xs font-bold text-violet-500 uppercase tracking-widest mb-2">
-                Step 2 of 3 · {selectedChapter?.name}
-              </p>
-              <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-2">Enter Patient Symptoms</h2>
-              <p className="text-gray-500 text-sm max-w-lg mx-auto">
-                Type or dictate each symptom and press <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Enter</kbd>.
-                Each symptom becomes a row in the analysis table.
-              </p>
             </div>
-
-            <div className="max-w-2xl mx-auto space-y-4">
-              {/* Symptom input box */}
-              <div className="bg-white border-2 border-gray-200 focus-within:border-sky-400 rounded-2xl p-4 transition-colors cursor-text min-h-[100px]"
-                onClick={() => inputRef.current?.focus()}>
-                {/* Existing tags */}
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {symptoms.map((sym, idx) => (
-                    <span key={idx} className="tag-in inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                      <Tag className="w-3 h-3 text-sky-400"/>
-                      {sym}
-                      <button onClick={e => { e.stopPropagation(); removeSymptom(idx); }}
-                        className="w-4 h-4 rounded-full bg-sky-200 hover:bg-red-400 flex items-center justify-center transition-colors">
-                        <X className="w-2.5 h-2.5 text-white"/>
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <input ref={inputRef} type="text"
-                    placeholder={symptoms.length ? "Add more symptoms…" : "e.g. headache evening, worse light, better cold…"}
-                    value={symptomInput} onChange={e => setSymptomInput(e.target.value)} onKeyDown={handleKeyDown}
-                    className="flex-1 bg-transparent text-gray-800 placeholder-gray-300 text-sm focus:outline-none"/>
-                  
-                  {/* MIC BUTTON & LANG TOGGLE */}
-                  <div className="relative flex items-center justify-center gap-1.5 z-10">
-                    <button onClick={(e) => { e.stopPropagation(); setDictationLang(p => p === "hi-IN" ? "en-IN" : "hi-IN"); }}
-                      className="text-[10px] font-black text-gray-500 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-md transition-colors"
-                      title="Toggle dictation language (English/Hindi)">
-                      {dictationLang === "hi-IN" ? "HI" : "EN"}
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full overflow-y-auto lg:overflow-hidden p-1">
+              {selectedChapters.map((chapter) => (
+                <div key={chapter.id} className="flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-h-[400px] lg:min-h-0">
+                  <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-gray-900 truncate">{chapter.name}</h3>
+                      {chapter.name_hindi && <p className="text-[10px] text-orange-500 font-medium">{chapter.name_hindi}</p>}
+                    </div>
+                    <button 
+                      onClick={() => toggleChapterSelection(chapter)}
+                      className="p-1.5 hover:bg-red-50 hover:text-red-500 text-gray-400 rounded-lg transition-colors flex-shrink-0 ml-2"
+                    >
+                      <X className="w-4 h-4" />
                     </button>
-                    
-                    <div className="relative flex items-center justify-center">
-                      {isListening && <div className="absolute w-8 h-8 rounded-full bg-red-400 pulse-ring pointer-events-none" />}
-                      <button onClick={e => {e.stopPropagation(); toggleListening();}}
-                        className={`relative flex items-center justify-center w-8 h-8 rounded-full transition-colors z-10 ${
-                          isListening ? "bg-red-500 text-white shadow-md hover:bg-red-600" : "bg-gray-100 text-gray-500 hover:bg-sky-100 hover:text-sky-600"
-                        }`} title="Voice dictation">
-                        {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                  </div>
+
+                  {/* Symptom Input */}
+                  <div className="p-4 border-b border-gray-100">
+                    <div className="flex items-center gap-2 bg-gray-100 p-2 rounded-xl border border-gray-200 focus-within:border-indigo-400 focus-within:bg-white transition-all overflow-hidden">
+                      <input 
+                        ref={el => inputRefs.current[chapter.id] = el}
+                        type="text" 
+                        placeholder="Add symptom..." 
+                        value={chapterInputs[chapter.id] || ""}
+                        onChange={e => setChapterInputs(prev => ({ ...prev, [chapter.id]: e.target.value }))}
+                        onKeyDown={e => handleKeyDown(e, chapter.id)}
+                        className="flex-1 bg-transparent border-none outline-none text-sm px-2 min-w-0"
+                      />
+                      <button 
+                        onClick={() => toggleListening(chapter.id)}
+                        className={`p-2 rounded-lg transition-all flex-shrink-0 ${isListening && listeningChapterId === chapter.id ? "bg-red-500 text-white animate-pulse" : "text-gray-400 hover:text-indigo-500 hover:bg-indigo-50"}`}
+                      >
+                        {isListening && listeningChapterId === chapter.id ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                      </button>
+                      <button 
+                        onClick={() => addSymptom(chapter.id)}
+                        className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex-shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
-                  
-                  {symptomInput && (
-                    <button onClick={addSymptom}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-sky-500 text-white rounded-lg text-xs font-bold hover:bg-sky-600 transition-colors">
-                      <Plus className="w-3 h-3"/> Add
-                    </button>
-                  )}
-                </div>
-              </div>
 
-              {/* Preview table (builds as symptoms added) */}
-              {symptoms.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden fade-in">
-                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-                    <Table2 className="w-4 h-4 text-gray-500"/>
-                    <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">
-                      Analysis Preview — {symptoms.length} symptom{symptoms.length>1?"s":""}
-                    </span>
+                  {/* Symptom List */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                    {(chapterSymptoms[chapter.id] || []).length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center py-10 opacity-30">
+                        <Tag className="w-8 h-8 text-gray-400 mb-2" />
+                        <p className="text-xs font-medium">No symptoms added</p>
+                      </div>
+                    ) : (
+                      chapterSymptoms[chapter.id].map((sym, idx) => (
+                        <div key={idx} className="group flex items-start justify-between p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-indigo-200 hover:bg-indigo-50 transition-all animate-in slide-in-from-top-2 gap-2">
+                          <div className="flex items-start gap-2 min-w-0 flex-1 pt-0.5">
+                            <Tag className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 mt-0.5" />
+                            <span className="text-sm font-semibold text-gray-700 break-words whitespace-normal text-left">{sym}</span>
+                          </div>
+                          <button 
+                            onClick={() => removeSymptom(chapter.id, idx)}
+                            className="p-1 text-gray-300 hover:text-red-500 hover:bg-white rounded-md transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
                   </div>
-                  <table className="rep-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Symptom</th>
-                        <th>Rubrics</th>
-                        <th>Medicines</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {symptoms.map((sym, i) => (
-                        <tr key={i}>
-                          <td className="text-gray-400 text-xs font-bold w-8">{i+1}</td>
-                          <td>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-100 text-sky-700 text-xs font-semibold">
-                              <Tag className="w-3 h-3"/>{sym}
-                            </span>
-                          </td>
-                          <td className="text-gray-400 text-xs italic">will be filled after analysis</td>
-                          <td className="text-gray-400 text-xs italic">—</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                </div>
+              ))}
+              
+              {selectedChapters.length < 3 && (
+                <div className="flex flex-col border-2 border-dashed border-gray-200 rounded-2xl items-center justify-center text-center p-6 opacity-40">
+                  <Plus className="w-10 h-10 text-gray-300 mb-2" />
+                  <p className="text-sm font-bold text-gray-400">Select {3 - selectedChapters.length} more chapter{3 - selectedChapters.length > 1 ? "s" : ""}</p>
                 </div>
               )}
-
-              {/* Quick add suggestions */}
-              <div>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Quick add</p>
-                <div className="flex flex-wrap gap-2">
-                  {["evening","morning","afternoon","night","worse heat","better cold",
-                    "worse motion","better rest","anxiety","irritable","fasting","eating"].map(s => (
-                    <button key={s} onClick={() => { if (!symptoms.includes(s)) setSymptoms(p => [...p,s]); }}
-                      disabled={symptoms.includes(s)}
-                      className="px-3 py-1 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-500 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                      + {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0"/> {error}
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setStage("chapter")}
-                  className="px-6 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:border-gray-300 hover:bg-gray-50 transition-all">
-                  ← Back
-                </button>
-                <button onClick={runRepertorize} disabled={!symptoms.length || loading}
-                  className="flex-1 flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                  {loading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin"/> Analyzing…</>
-                  ) : (
-                    <><Zap className="w-4 h-4"/> Run Analysis
-                      {symptoms.length>0 && <span className="ml-1 px-2 py-0.5 bg-white/20 rounded text-xs">{symptoms.length}</span>}
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
-          </div>
-        )}
+          )}
+        </main>
+      </div>
 
-        {/* ══════════════════════════════════════════════════════════════════
-            STAGE 3 · Results (Tabular)
-        ══════════════════════════════════════════════════════════════════ */}
-        {stage === "results" && result && (
-          <div className="py-6 fade-in space-y-6">
-
-            {/* Results header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* ANALYSIS MODAL */}
+      {isAnalysisModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-[1400px] max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500"/>
-                  <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Analysis Complete</span>
-                </div>
-                <h2 className="text-xl md:text-2xl font-black text-gray-900">Repertorization Table</h2>
-                <p className="text-gray-500 text-sm mt-0.5">
-                  Chapter: <span className="text-gray-800 font-semibold">{selectedChapter?.name}</span>
-                  &nbsp;·&nbsp;
-                  <span className="text-gray-800 font-semibold">{result.total_matched}</span> rubrics matched
+                <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3">
+                  <Sparkles className="w-6 h-6 text-indigo-500" />
+                  Comparative Analysis Results
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Showing results across {Object.values(analysisResults).filter(r => r.top_rubrics?.length > 0).length} matched chapter{Object.values(analysisResults).filter(r => r.top_rubrics?.length > 0).length !== 1 ? 's' : ''}
                 </p>
               </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button onClick={() => { setStage("symptoms"); setResult(null); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors">
-                  <Filter className="w-3.5 h-3.5"/> Edit Symptoms
-                </button>
-                <button onClick={() => { setStage("chapter"); setSelectedChapter(null); setSymptoms([]); setResult(null); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors">
-                  <BookOpen className="w-3.5 h-3.5"/> New Analysis
-                </button>
-              </div>
+              <button 
+                onClick={() => setIsAnalysisModalOpen(false)}
+                className="w-10 h-10 rounded-full hover:bg-red-50 hover:text-red-500 text-gray-400 flex items-center justify-center transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
-            {/* ─── MAIN TABLE: Symptom | Rubrics | Associated Medicines ──── */}
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2 bg-gray-50">
-                <Table2 className="w-4 h-4 text-gray-500"/>
-                <h3 className="text-sm font-bold text-gray-700">Symptom → Rubric → Medicine Mapping</h3>
-                <span className="ml-auto text-xs text-gray-400">
-                  {result.symptoms_breakdown.length} symptom{result.symptoms_breakdown.length!==1?"s":""}
-                </span>
-              </div>
+            {/* Modal Body */}
+            <div className="flex-1 overflow-x-auto p-6 bg-gray-50/50">
+              <div className="flex gap-6 min-w-max h-full">
+                {(selectedChapters.length > 0 ? selectedChapters : identifiedChapters).map((chapter) => {
+                  const result = analysisResults[chapter.id];
+                  // Skip chapters with no results or empty rubrics
+                  if (!result || !result.top_rubrics?.length) return null;
+                  
+                  // Extract modalities from nested rubric structure (backend returns them inside top_rubrics[].modalities)
+                  const allRubrics = result.top_rubrics || [];
+                  
+                  // Extract synonym pairs (English + Hindi)
+                  const synonymPairs = Array.from(
+                    new Map(
+                      allRubrics.flatMap(r => (r.synonyms || []).map((s: any) => {
+                        const eng = typeof s === 'string' ? s : (s.synonym || s.name || "");
+                        const hi  = typeof s === 'object' ? (s.synonym_hindi || "") : "";
+                        return [eng, { eng, hi }];
+                      }).filter(([k]) => k))
+                    ).values()
+                  ).slice(0, 8);
 
-              <div className="overflow-x-auto">
-                <table className="rep-table">
-                  <thead>
-                    <tr>
-                      <th style={{width:32}}>#</th>
-                      <th style={{width:160}}>Symptom</th>
-                      <th style={{width:320}}>Matched Rubrics</th>
-                      <th>Associated Medicines</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.symptoms_breakdown.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="text-center py-12 text-gray-400 text-sm">
-                          No rubrics matched the provided symptoms.
-                        </td>
-                      </tr>
-                    ) : result.symptoms_breakdown.map((row, rowIdx) => {
-                      // Collect all medicines across this symptom's rubrics (deduplicated)
-                      const medMap: Record<number,{name:string;latin_name:string;grade:number;rubrics:string[]}> = {};
-                      row.rubrics.forEach(rb => {
-                        rb.medicines.forEach(m => {
-                          if (!medMap[m.id]) medMap[m.id] = { name:m.name, latin_name:m.latin_name, grade:m.grade, rubrics:[] };
-                          medMap[m.id].rubrics.push(rb.name);
-                          medMap[m.id].grade = Math.max(medMap[m.id].grade, m.grade);
-                        });
-                      });
-                      const allMeds = Object.entries(medMap).map(([id,v]) => ({id:+id,...v}))
-                        .sort((a,b) => b.grade - a.grade);
+                  // Extract modality pairs with Hindi
+                  const aggravationPairs = Array.from(new Map(
+                    allRubrics.flatMap(r => (r.modalities?.aggravations || []).map((m: any) => [
+                      m.name, { eng: m.name, hi: m.name_hindi || "" }
+                    ]))
+                  ).values()).slice(0, 6);
 
-                      return (
-                        <tr key={rowIdx}>
-                          {/* # */}
-                          <td className="text-gray-400 text-xs font-bold">{rowIdx+1}</td>
+                  const ameliorationPairs = Array.from(new Map(
+                    allRubrics.flatMap(r => (r.modalities?.ameliorations || []).map((m: any) => [
+                      m.name, { eng: m.name, hi: m.name_hindi || "" }
+                    ]))
+                  ).values()).slice(0, 6);
 
-                          {/* Symptom column */}
-                          <td>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 text-xs font-bold">
-                              <Tag className="w-3 h-3 text-sky-400 flex-shrink-0"/>
-                              {row.symptom}
-                            </span>
-                            <p className="text-[10px] text-gray-400 mt-1.5 font-medium">
-                              {row.rubric_count} rubric{row.rubric_count!==1?"s":""}
-                            </p>
-                          </td>
+                  return (
+                    <div key={chapter.id} className="w-[400px] bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+                      {/* Chapter Header */}
+                      <div className="p-4 bg-indigo-600 text-white">
+                        <h3 className="text-lg font-black">{chapter.name}</h3>
+                        {chapter.name_hindi && (
+                          <p className="text-indigo-200 text-sm font-medium mt-0.5">{chapter.name_hindi}</p>
+                        )}
+                        <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-wider mt-1">{result.total_matched} rubrics matched</p>
+                      </div>
 
-                          {/* Rubrics column */}
-                          <td>
-                            {row.rubrics.length === 0 ? (
-                              <span className="text-gray-300 text-xs italic">No rubrics matched</span>
-                            ) : (
-                              <div className="flex flex-col gap-1.5">
-                                {row.rubrics.slice(0, 4).map((rb, ri) => {
-                                  const cellKey = `${rowIdx}-${ri}`;
-                                  const expanded = expandedRubricCell === cellKey;
-                                  return (
-                                    <div key={rb.id}>
-                                      <button
-                                        onClick={() => setExpandedRubricCell(expanded ? null : cellKey)}
-                                        className="rubric-pill w-full text-left"
-                                        title={rb.full_path || rb.name}
-                                        style={{ maxWidth: '100%', whiteSpace: 'normal', height: 'auto', display: 'flex', alignItems: 'flex-start' }}
-                                      >
-                                        <FlaskConical className="w-3 h-3 flex-shrink-0 text-blue-400 mt-0.5"/>
-                                        <div className="flex-1 min-w-0">
-                                          <span className="text-xs leading-tight">{rb.full_path || rb.name}</span>
-                                          {rb.name_hindi && <span className="block text-[10px] text-orange-500 mt-0.5">{rb.name_hindi}</span>}
-                                        </div>
-                                        <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform mt-0.5 ml-1 ${expanded?"rotate-180":""}`}/>
-                                      </button>
-                                      {expanded && rb.medicines.length > 0 && (
-                                        <div className="mt-1 ml-2 p-2 bg-blue-50 border border-blue-100 rounded-lg fade-in">
-                                          <p className="text-[9px] text-blue-500 font-bold uppercase mb-1">Medicines ({rb.medicine_count})</p>
-                                          <div className="flex flex-wrap gap-1">
-                                            {rb.medicines.map(m => (
-                                              <span key={m.id} className={`med-chip ${GRADE_COLORS[m.grade]||"bg-gray-100 text-gray-600"}`}>
-                                                {m.name}
-                                                <span className="opacity-60 text-[9px]">G{m.grade}</span>
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                                {row.rubric_count > 4 && (
-                                  <span className="text-[10px] text-gray-400 italic">+{row.rubric_count-4} more</span>
+                      <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                        {/* Rubrics Match Section */}
+                        <section>
+                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                            <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                            TOP RUBRIC MATCHES
+                          </h4>
+                          <div className="space-y-3">
+                            {allRubrics.slice(0, 4).map(rb => (
+                              <div key={rb.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                <p className="text-xs font-bold text-gray-800 leading-tight">{rb.full_path || rb.name}</p>
+                                {rb.name_hindi && (
+                                  <p className="text-[10px] text-orange-500 font-medium mt-0.5">{rb.name_hindi}</p>
                                 )}
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {(rb.matched_symptoms || []).map((s: string, i: number) => (
+                                    <span key={i} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-bold border border-emerald-100">
+                                      {s}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
-                            )}
-                          </td>
+                            ))}
+                          </div>
+                        </section>
 
-                          {/* Medicines column */}
-                          <td>
-                            {allMeds.length === 0 ? (
-                              <span className="text-gray-300 text-xs italic">—</span>
-                            ) : (
-                              <div className="flex flex-wrap gap-1">
-                                {allMeds.slice(0, 8).map(m => (
-                                  <span key={m.id} title={m.latin_name}
-                                    className={`med-chip ${GRADE_COLORS[m.grade]||"bg-gray-100 text-gray-600"}`}>
-                                    <Pill className="w-2.5 h-2.5"/>
-                                    {m.name}
-                                    <span className="opacity-50 text-[9px]">G{m.grade}</span>
+                        {/* Modalities Section */}
+                        <section>
+                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                            <Activity className="w-3.5 h-3.5 text-purple-500" />
+                            MODALITIES
+                          </h4>
+                          {aggravationPairs.length > 0 && (
+                            <div className="mb-2">
+                              <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider mb-1.5">⬆ Aggravated by</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {aggravationPairs.map((m, i) => (
+                                  <span key={i} className="px-2 py-0.5 bg-red-50 text-red-700 rounded-lg text-[10px] font-semibold border border-red-100">
+                                    {m.eng}{m.hi && <span className="text-red-400 ml-1">· {m.hi}</span>}
                                   </span>
                                 ))}
-                                {allMeds.length > 8 && (
-                                  <span className="text-[10px] text-gray-400 italic self-center">+{allMeds.length-8} more</span>
-                                )}
                               </div>
+                            </div>
+                          )}
+                          {ameliorationPairs.length > 0 && (
+                            <div>
+                              <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-1.5">⬇ Ameliorated by</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {ameliorationPairs.map((m, i) => (
+                                  <span key={i} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] font-semibold border border-emerald-100">
+                                    {m.eng}{m.hi && <span className="text-emerald-500 ml-1">· {m.hi}</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {aggravationPairs.length === 0 && ameliorationPairs.length === 0 && (
+                            <p className="text-xs text-gray-400 italic">No specific modalities found</p>
+                          )}
+                        </section>
+
+                        {/* Synonyms Section */}
+                        <section>
+                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                            <Tag className="w-3.5 h-3.5 text-amber-500" />
+                            SYNONYMS
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {synonymPairs.length > 0 ? synonymPairs.map((s, i) => (
+                              <span key={i} className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold border border-amber-100">
+                                {s.eng}
+                                {s.hi && <span className="text-orange-400 ml-1 font-normal">· {s.hi}</span>}
+                              </span>
+                            )) : (
+                              <p className="text-xs text-gray-400 italic">No synonyms found</p>
                             )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+                        </section>
+
+                        {/* Medicines Section */}
+                        <section>
+                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                            <Pill className="w-3.5 h-3.5 text-rose-500" />
+                            INDICATED MEDICINES
+                          </h4>
+                          <div className="space-y-2">
+                            {result.medicine_chart.slice(0, 5).map((med, i) => (
+                              <div key={med.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100 hover:border-rose-200 transition-all">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-gray-800 truncate">{med.name}</p>
+                                  <p className="text-[9px] text-gray-400 italic truncate">{med.latin_name}</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{med.occurrences} Rubrics</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* ─── BOTTOM SECTION: Top Rubrics + Medicine Chart ─────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Top 3 rubrics summary */}
-              <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-amber-500"/>
-                  <h3 className="text-sm font-bold text-gray-700">Top {result.top_rubrics.length} Matched Rubrics</h3>
-                </div>
-                <div className="divide-y divide-gray-50">
-                  {result.top_rubrics.length === 0 ? (
-                    <p className="text-center py-10 text-gray-400 text-sm">No rubrics matched</p>
-                  ) : result.top_rubrics.map((rb, i) => (
-                    <div key={rb.id} className="px-5 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start gap-3">
-                        <span className="text-lg font-black text-gray-400 flex-shrink-0 mt-0.5 w-6 text-center">#{i + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-bold text-sm text-gray-900 truncate">{rb.full_path || rb.name}</p>
-                          </div>
-                          {rb.name_hindi && <p className="text-orange-500 text-xs mb-1">{rb.name_hindi}</p>}
-                          {/* Matched symptoms for this rubric */}
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {rb.matched_symptoms.map((sym,si) => (
-                              <span key={si} className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
-                                ✓ {sym}
-                              </span>
-                            ))}
-                          </div>
-                          {/* Top medicines for this rubric */}
-                          <div className="flex flex-wrap gap-1">
-                            {rb.medicines.slice(0,5).map(m => (
-                              <span key={m.id} className={`med-chip ${GRADE_COLORS[m.grade]||"bg-gray-100 text-gray-600"}`}>
-                                {m.name}<span className="opacity-50 text-[9px]">·G{m.grade}</span>
-                              </span>
-                            ))}
-                            {rb.medicine_count > 5 && (
-                              <span className="text-[10px] text-gray-400 italic self-center">+{rb.medicine_count-5}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Medicine frequency chart */}
-              <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-violet-500"/>
-                  <h3 className="text-sm font-bold text-gray-700">Medicine Frequency Chart</h3>
-                  <span className="ml-auto text-xs text-gray-400">across top rubrics</span>
-                </div>
-
-                {/* Top medicine highlight */}
-                {result.medicine_chart.length > 0 && (
-                  <div className="mx-5 mt-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">🏆</span>
-                      <div>
-                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Most Indicated</p>
-                        <p className="font-black text-gray-900 text-lg leading-tight">{result.medicine_chart[0].name}</p>
-                        <p className="text-gray-400 text-xs italic">{result.medicine_chart[0].latin_name}</p>
-                      </div>
-                      <div className="ml-auto text-right">
-                        <p className="text-2xl font-black text-amber-600">{result.medicine_chart[0].occurrences}</p>
-                        <p className="text-[10px] text-gray-400">rubric{result.medicine_chart[0].occurrences!==1?"s":""}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Bar chart */}
-                <div className="p-5 space-y-3 max-h-96 overflow-y-auto">
-                  {result.medicine_chart.length === 0 ? (
-                    <p className="text-center text-gray-400 text-sm py-8">No medicines found</p>
-                  ) : result.medicine_chart.slice(0,12).map((med, i) => {
-                    const pct = Math.round((med.score / maxChartScore) * 100);
-                    const isTop = i === 0;
-                    return (
-                      <div key={med.id} className={`p-3 rounded-xl ${isTop?"bg-amber-50 border border-amber-200":"border border-gray-100"}`}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {isTop && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 flex-shrink-0"/>}
-                            <p className="font-bold text-sm text-gray-900 truncate">{med.name}</p>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                            {/* Occurrence dots */}
-                            <div className="flex gap-0.5">
-                              {Array.from({length:result.top_rubrics.length}).map((_,di) => (
-                                <div key={di} className={`w-2 h-2 rounded-full ${di<med.occurrences?"bg-sky-500":"bg-gray-200"}`}/>
-                              ))}
-                            </div>
-                            <span className="text-xs font-bold text-gray-500 tabular-nums">{med.occurrences}/{result.top_rubrics.length}</span>
-                          </div>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                          <div className="bar-fill h-full rounded-full"
-                            style={{width:`${pct}%`, background: isTop ? "linear-gradient(90deg,#f59e0b,#ef4444)" : "linear-gradient(90deg,#38bdf8,#818cf8)"}}/>
-                        </div>
-                        <div className="flex items-center justify-end mt-1.5 text-[10px] text-gray-400">
-                          <span className="italic truncate max-w-[160px]" title={med.rubric_names.join(", ")}>
-                            found in: {med.rubric_names.slice(0,2).join(", ")}
-                            {med.rubric_names.length > 2 && "..."}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Legend */}
-                <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Info className="w-3.5 h-3.5 text-gray-400"/>
-                    <span className="text-[10px] text-gray-400">Dots = rubric coverage · Bar = overall score</span>
-                  </div>
-                  <div className="flex gap-1 ml-auto">
-                    {[1,2,3,4,5].map(g => (
-                      <span key={g} className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${GRADE_COLORS[g]}`}>G{g}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-100 bg-white flex justify-end">
+              <button 
+                onClick={() => setIsAnalysisModalOpen(false)}
+                className="px-6 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg"
+              >
+                Close Results
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
       {/* Rubric Management Modal */}
       <RubricModal
         isOpen={isRubricModalOpen}
