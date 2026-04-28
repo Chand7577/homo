@@ -969,51 +969,64 @@ export default function RubricsPage() {
                           </div>
                           <div>
                             <h3 className="text-lg font-black text-gray-900">Medicine Distribution</h3>
-                            <p className="text-xs text-gray-500 font-medium">Ranked by overall occurrence across all symptoms</p>
+                            <p className="text-xs text-black font-medium">Ranked by overall occurrence across all symptoms</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="bg-gray-50 px-4 py-2 rounded-xl border border-gray-100">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Total Remedies Found</span>
-                            <span className="text-sm font-black text-gray-900">{globalMedicineMap.size}</span>
+                            <span className="text-[10px] font-black text-black uppercase tracking-widest block mb-0.5">Total Remedies Found</span>
+                            <span className="text-sm font-black text-black">{globalMedicineMap.size}</span>
                           </div>
                           <div className="bg-white px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Top Result</span>
-                            <span className="text-sm font-black text-indigo-600 uppercase">{sorted[0].name}</span>
+                            <span className="text-[10px] font-black text-black uppercase tracking-widest block mb-0.5">Top Result</span>
+                            <span className="text-sm font-black text-black uppercase">{sorted[0].name}</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="space-y-4 max-w-5xl mx-auto">
-                        {sorted.map((med, idx) => (
-                          <div key={idx} className="flex items-center gap-4 group">
-                            {/* Y-Axis: Medicine Name */}
-                            <div className="w-32 md:w-48 flex-shrink-0 text-right">
-                              <span className="text-sm font-bold text-gray-700 group-hover:text-indigo-600 transition-colors truncate block">
-                                {med.name}
-                              </span>
-                            </div>
-                            
-                            {/* X-Axis: Occurrence Bar */}
-                            <div className="flex-1 h-8 bg-white rounded-lg relative overflow-hidden flex items-center px-3 border border-gray-100 group-hover:border-indigo-100 transition-all shadow-sm">
-                              <div 
-                                className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-indigo-500/10 to-indigo-500/20 bar-fill border-r border-indigo-200"
-                                style={{ width: `${(med.count / maxCount) * 100}%` }}
-                              />
-                              <div className="relative z-10 flex items-center justify-between w-full">
-                                <div className="flex items-center gap-2">
-                                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-                                  <span className="text-[10px] font-black text-indigo-700 uppercase tracking-tighter">
-                                    {Math.round((med.count / maxCount) * 100)}% Match Strength
-                                  </span>
-                                </div>
-                                <span className="text-xs font-black text-gray-900 bg-white/80 px-2 py-0.5 rounded-md shadow-sm border border-gray-100">
-                                  {med.count} Matches
+                        {sorted.map((med, idx) => {
+                          // Dynamic font size based on rank
+                          const nameSizeClass = idx === 0 ? "text-lg md:text-xl font-black" 
+                                              : idx < 3 ? "text-base md:text-lg font-bold"
+                                              : idx < 6 ? "text-sm md:text-base font-bold"
+                                              : "text-xs md:text-sm font-semibold";
+                          
+                          const opacityClass = idx > 6 ? "opacity-70" : "opacity-100";
+
+                          return (
+                            <div 
+                              key={idx} 
+                              className={`flex items-center gap-4 group animate-in fade-in slide-in-from-left-6 duration-700 fill-mode-both ${opacityClass}`}
+                              style={{ animationDelay: `${idx * 150}ms` }}
+                            >
+                              {/* Y-Axis: Medicine Name */}
+                              <div className="w-32 md:w-56 flex-shrink-0 text-right">
+                                <span className={`${nameSizeClass} text-black transition-all truncate block tracking-tight`}>
+                                  {med.name}
                                 </span>
                               </div>
+                              
+                              {/* X-Axis: Occurrence Bar */}
+                              <div className="flex-1 h-10 bg-indigo-50/30 rounded-xl relative overflow-hidden flex items-center px-4 border border-indigo-100/50 group-hover:border-indigo-300 transition-all shadow-sm">
+                                <div 
+                                  className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-indigo-500 to-indigo-600 bar-fill shadow-[0_0_15px_rgba(79,70,229,0.2)]"
+                                  style={{ width: `${(med.count / maxCount) * 100}%` }}
+                                />
+                                <div className="relative z-10 flex items-center justify-between w-full px-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs md:text-sm font-black uppercase tracking-tighter text-black">
+                                      {Math.round((med.count / maxCount) * 100)}% Match Strength
+                                    </span>
+                                  </div>
+                                  <span className="text-sm md:text-base font-black text-black bg-white/90 px-3 py-1 rounded-lg shadow-sm border border-gray-100 group-hover:scale-105 transition-transform">
+                                    {med.count} Matches
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       {/* X-Axis Legend */}
@@ -1022,8 +1035,8 @@ export default function RubricsPage() {
                         <div className="flex-1 flex justify-between px-1">
                           {[0, 25, 50, 75, 100].map(p => (
                             <div key={p} className="flex flex-col items-center">
-                              <div className="h-2 w-px bg-gray-200 mb-1" />
-                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">{p === 100 ? `${maxCount} Max` : `${Math.round((p/100)*maxCount)}`}</span>
+                              <div className="h-2 w-px bg-black mb-1" />
+                              <span className="text-[9px] font-bold text-black uppercase tracking-tighter">{p === 100 ? `${maxCount} Max` : `${Math.round((p/100)*maxCount)}`}</span>
                             </div>
                           ))}
                         </div>
