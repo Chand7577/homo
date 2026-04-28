@@ -16,81 +16,84 @@ const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 // ─── Inverted Index: keyword → candidate chapter names ───────────────────────
 // Resolves symptoms to chapters entirely client-side for known terms.
 // This eliminates probe API calls for the vast majority of symptoms.
-const KEYWORD_INDEX: Record<string, string[]> = {
-  // MIND
-  anger:"MIND",anxiety:"MIND",fear:"MIND",grief:"MIND",sad:"MIND",depression:"MIND",
-  irritab:"MIND",mental:"MIND",worry:"MIND",confusion:"MIND",memory:"MIND",
-  delusion:"MIND",insanity:"MIND",weeping:"MIND",jealous:"MIND",indifference:"MIND",
-  restless:"MIND",contradiction:"MIND",forgetful:"MIND",aversion:"MIND",
-  // HINDI MIND
-  "मन":"MIND","डर":"MIND","गुस्सा":"MIND","दुख":"MIND","चिंता":"MIND",
-  // HEAD
-  headache:"HEAD",head:"HEAD",migraine:"HEAD",vertigo:"HEAD",dizz:"HEAD",scalp:"HEAD",
-  forehead:"HEAD",temple:"HEAD",occiput:"HEAD",
-  "सिर":"HEAD","माथा":"HEAD",
-  // EYES
-  eye:"EYES",vision:"EYES",sight:"EYES",cornea:"EYES",conjunctiv:"EYES",
-  lachrymation:"EYES",photophobia:"EYES","आँख":"EYES",
-  // EARS
-  ear:"EARS",hearing:"EARS",tinnitus:"EARS",deafness:"EARS",otitis:"EARS",
-  "कान":"EARS",
-  // NOSE
-  nose:"NOSE",nasal:"NOSE",sneezing:"NOSE",rhinitis:"NOSE",coryza:"NOSE",
-  "नाक":"NOSE",
-  // MOUTH
-  mouth:"MOUTH",tongue:"MOUTH",lips:"MOUTH",saliva:"MOUTH",aphthae:"MOUTH",
-  "मुँह":"MOUTH",
-  // TEETH
-  teeth:"TEETH",tooth:"TEETH",gum:"TEETH",dental:"TEETH",caries:"TEETH",
-  "दाँत":"TEETH","मसूड़":"TEETH",
-  // THROAT
-  throat:"THROAT",tonsil:"THROAT",swallow:"THROAT",pharynx:"THROAT",hoarse:"THROAT",
-  "गला":"THROAT",
-  // STOMACH
-  stomach:"STOMACH",nausea:"STOMACH",vomit:"STOMACH",gastric:"STOMACH",
-  appetite:"STOMACH",thirst:"STOMACH",hunger:"STOMACH",eructation:"STOMACH",
-  heartburn:"STOMACH","पेट":"STOMACH","भूख":"STOMACH","प्यास":"STOMACH",
-  // ABDOMEN
-  abdomen:"ABDOMEN",abdominal:"ABDOMEN",belly:"ABDOMEN",intestine:"ABDOMEN",
-  bowel:"ABDOMEN",colic:"ABDOMEN",cramp:"ABDOMEN",bloat:"ABDOMEN",distension:"ABDOMEN",
-  flatulence:"ABDOMEN","पेड़ू":"ABDOMEN","आँत":"ABDOMEN",
-  // RECTUM
-  stool:"RECTUM",constipat:"RECTUM",diarrhea:"RECTUM",rectal:"RECTUM",
-  hemorrhoid:"RECTUM",piles:"RECTUM",dysentery:"RECTUM",
-  "कब्ज":"RECTUM","दस्त":"RECTUM",
-  // URINARY
-  urine:"URINARY ORGANS",urinary:"URINARY ORGANS",kidney:"URINARY ORGANS",
-  bladder:"URINARY ORGANS",dysuria:"URINARY ORGANS","पेशाब":"URINARY ORGANS",
-  // CHEST
-  chest:"CHEST",lung:"CHEST",heart:"CHEST",palpitat:"CHEST",breast:"CHEST",
-  "छाती":"CHEST","हृदय":"CHEST",
-  // RESPIRATION
-  breath:"RESPIRATION",breathe:"RESPIRATION",asthma:"RESPIRATION",
-  wheez:"RESPIRATION",dyspnea:"RESPIRATION","साँस":"RESPIRATION",
-  // COUGH
-  cough:"COUGH","खाँसी":"COUGH",
-  // BACK
-  back:"BACK",spine:"BACK",lumbar:"BACK",sacrum:"BACK",sciatica:"BACK",
-  "पीठ":"BACK",
-  // EXTREMITIES
-  leg:"EXTREMITIES",arm:"EXTREMITIES",joint:"EXTREMITIES",knee:"EXTREMITIES",
-  ankle:"EXTREMITIES",hand:"EXTREMITIES",foot:"EXTREMITIES",feet:"EXTREMITIES",
-  elbow:"EXTREMITIES",shoulder:"EXTREMITIES",wrist:"EXTREMITIES",hip:"EXTREMITIES",
-  rheumatism:"EXTREMITIES",arthritis:"EXTREMITIES",
-  "हाथ":"EXTREMITIES","पैर":"EXTREMITIES",
-  // SKIN
-  skin:"SKIN",rash:"SKIN",eruption:"SKIN",itch:"SKIN",eczema:"SKIN",
-  urticaria:"SKIN",psoriasis:"SKIN",acne:"SKIN",hive:"SKIN",
-  "त्वचा":"SKIN","खुजली":"SKIN",
-  // FEVER
-  fever:"FEVER",temperature:"FEVER",chill:"FEVER",ague:"FEVER",
-  "बुखार":"FEVER",
-  // SLEEP
-  sleep:"SLEEP",insomnia:"SLEEP",somnambulism:"SLEEP","नींद":"SLEEP",
-  // GENERALITIES — low-priority fallback, must not outcompete specific chapters
-  weakness:"GENERALITIES",fatigue:"GENERALITIES",weight:"GENERALITIES",
-  perspiration:"GENERALITIES",sweat:"GENERALITIES",
-  "कमज़ोरी":"GENERALITIES","पसीना":"GENERALITIES",
+const KEYWORD_INDEX: Record<string, string> = {
+  // Mind
+  anger:"Mind",anxiety:"Mind",fear:"Mind",grief:"Mind",sad:"Mind",depression:"Mind",
+  irritab:"Mind",mental:"Mind",worry:"Mind",confusion:"Mind",memory:"Mind",
+  delusion:"Mind",insanity:"Mind",weeping:"Mind",jealous:"Mind",indifference:"Mind",
+  restless:"Mind",contradiction:"Mind",forgetful:"Mind",aversion:"Mind",
+  // HINDI Mind
+  "मन":"Mind","डर":"Mind","गुस्सा":"Mind","दुख":"Mind","चिंता":"Mind",
+  // Head
+  headache:"Head",head:"Head",migraine:"Head",vertigo:"Head",dizz:"Head",scalp:"Head",
+  forehead:"Head",temple:"Head",occiput:"Head",
+  "सिर":"Head","माथा":"Head",
+  // Eyes
+  eye:"Eyes",vision:"Eyes",sight:"Eyes",cornea:"Eyes",conjunctiv:"Eyes",
+  lachrymation:"Eyes",photophobia:"Eyes","आँख":"Eyes",
+  // Ears
+  ear:"Ears",hearing:"Ears",tinnitus:"Ears",deafness:"Ears",otitis:"Ears",
+  "कान":"Ears",
+  // Nose
+  nose:"Nose",nasal:"Nose",sneezing:"Nose",rhinitis:"Nose",coryza:"Nose",
+  "नाक":"Nose",
+  // Mouth
+  mouth:"Mouth",tongue:"Mouth",lips:"Mouth",saliva:"Mouth",aphthae:"Mouth",
+  "मुँह":"Mouth",
+  // Teeth
+  teeth:"Teeth",tooth:"Teeth",gum:"Teeth",dental:"Teeth",caries:"Teeth",
+  "दाँत":"Teeth","मसूड़":"Teeth",
+  // Throat
+  throat:"Throat",tonsil:"Throat",swallow:"Throat",pharynx:"Throat",hoarse:"Throat",
+  "गला":"Throat",
+  // Stomach
+  stomach:"Stomach",nausea:"Stomach",vomit:"Stomach",gastric:"Stomach",
+  appetite:"Stomach",thirst:"Stomach",hunger:"Stomach",eructation:"Stomach",
+  heartburn:"Stomach","पेट":"Stomach","भूख":"Stomach","प्यास":"Stomach",
+  // Abdomen
+  abdomen:"Abdomen",abdominal:"Abdomen",belly:"Abdomen",intestine:"Abdomen",
+  bowel:"Abdomen",colic:"Abdomen",cramp:"Abdomen",bloat:"Abdomen",distension:"Abdomen",
+  flatulence:"Abdomen","पेड़ू":"Abdomen","आँत":"Abdomen",
+  // Rectum
+  stool:"Rectum",constipat:"Rectum",diarrhea:"Rectum",rectal:"Rectum",
+  hemorrhoid:"Rectum",piles:"Rectum",dysentery:"Rectum",
+  "कब्ज":"Rectum","दस्त":"Rectum",
+  // Urinary
+  urine:"Urinary",urinary:"Urinary",kidney:"Urinary",
+  bladder:"Urinary",dysuria:"Urinary","पेशाब":"Urinary",
+  // Chest
+  chest:"Chest",lung:"Chest",heart:"Chest",palpitat:"Chest",breast:"Chest",
+  "छाती":"Chest","हृदय":"Chest",
+  // Respiration
+  breath:"Respiratory",breathe:"Respiratory",asthma:"Respiratory",
+  wheez:"Respiratory",dyspnea:"Respiratory","साँस":"Respiratory",
+  // Cough
+  cough:"Cough","खाँसी":"Cough",
+  // Back
+  back:"Back",spine:"Back",lumbar:"Back",sacrum:"Back",sciatica:"Back",
+  "पीठ":"Back",
+  // Extremities
+  leg:"Extremities",arm:"Extremities",joint:"Extremities",knee:"Extremities",
+  ankle:"Extremities",hand:"Extremities",foot:"Extremities",feet:"Extremities",
+  elbow:"Extremities",shoulder:"Extremities",wrist:"Extremities",hip:"Extremities",
+  rheumatism:"Extremities",arthritis:"Extremities",
+  "हाथ":"Extremities","पैर":"Extremities",
+  // Skin
+  skin:"Skin",rash:"Skin",eruption:"Skin",itch:"Skin",eczema:"Skin",
+  urticaria:"Skin",psoriasis:"Skin",acne:"Skin",hive:"Skin",
+  "त्वचा":"Skin","खुजली":"Skin",
+  // Fever
+  fever:"Fever",temperature:"Fever",chill:"Fever",ague:"Fever",
+  "बुखार":"Fever",
+  // Sleep
+  sleep:"Sleep",insomnia:"Sleep",somnambulism:"Sleep","नींद":"Sleep",
+  // Generalities
+  weakness:"Generalities",fatigue:"Generalities",weight:"Generalities",
+  perspiration:"Generalities",sweat:"Generalities",
+  "कमज़ोरी":"Generalities","पसीना":"Generalities",
+  // Blood
+  bleed:"Blood",bleeding:"Blood",blood:"Blood",hemorrhage:"Blood",
+  "खून":"Blood","रक्त":"Blood",
 } as Record<string, string>;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -268,7 +271,6 @@ export default function RubricsPage() {
         setChapterInputs(newInputs);
         return next;
       }
-      if (prev.length >= 3) return prev;
       return [...prev, chapter];
     });
     // Auto-close sidebar after selection/deselection
@@ -412,7 +414,7 @@ export default function RubricsPage() {
           chapterSymMap[matched.id].syms.push(sym);
         }
 
-        const chaptersToQuery = Object.values(chapterSymMap).slice(0, 3);
+        const chaptersToQuery = Object.values(chapterSymMap);
         if (chaptersToQuery.length === 0) {
           setError("Could not identify relevant chapters. Try more specific keywords.");
           return;
@@ -499,7 +501,7 @@ export default function RubricsPage() {
             {selectedChapters.length > 0 && (
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100">
                 <BookOpen className="w-3.5 h-3.5" />
-                {selectedChapters.length}/3 Chapters Selected
+                {selectedChapters.length} Chapters Selected
               </div>
             )}
             <button 
@@ -651,7 +653,7 @@ export default function RubricsPage() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full overflow-y-auto lg:overflow-hidden p-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 h-full overflow-y-auto lg:overflow-hidden p-1">
               {selectedChapters.map((chapter) => (
                 <div key={chapter.id} className="flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-h-[400px] lg:min-h-0">
                   <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
@@ -721,11 +723,14 @@ export default function RubricsPage() {
                 </div>
               ))}
               
-              {selectedChapters.length < 3 && (
-                <div className="flex flex-col border-2 border-dashed border-gray-200 rounded-2xl items-center justify-center text-center p-6 opacity-40">
-                  <Plus className="w-10 h-10 text-gray-300 mb-2" />
-                  <p className="text-sm font-bold text-gray-400">Select {3 - selectedChapters.length} more chapter{3 - selectedChapters.length > 1 ? "s" : ""}</p>
-                </div>
+              {selectedChapters.length > 0 && (
+                <button 
+                  onClick={() => setIsSidebarExpanded(true)}
+                  className="flex flex-col border-2 border-dashed border-gray-200 rounded-2xl items-center justify-center text-center p-6 opacity-40 hover:opacity-100 hover:border-indigo-300 transition-all group"
+                >
+                  <Plus className="w-10 h-10 text-gray-300 mb-2 group-hover:text-indigo-400" />
+                  <p className="text-sm font-bold text-gray-400 group-hover:text-indigo-500">Add another chapter</p>
+                </button>
               )}
             </div>
           )}
@@ -758,14 +763,14 @@ export default function RubricsPage() {
             {/* Modal Body */}
             <div className="flex-1 p-6 bg-gray-50/50 w-full overflow-hidden flex flex-col">
               <div className="w-full h-full bg-white rounded-2xl border border-gray-200 shadow-sm overflow-y-auto">
-                <table className="w-full text-left text-sm table-fixed border-collapse">
+                <table className="w-full text-left text-sm table-fixed border-collapse border border-gray-200">
                   <thead className="sticky top-0 z-50 shadow-sm border-b border-indigo-200 bg-red-400">
                     <tr>
-                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[8%]">Chapter</th>
-                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[12%]">Medicines</th>
-                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[60%]">Matched Rubrics</th>
-                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[12%]">Modalities</th>
-                      <th className="p-4 font-black text-indigo-800 bg-indigo-50 w-[8%] text-right">Synonyms</th>
+                      <th style={{width:'5%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Chapter</th>
+                      <th style={{width:'10%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Medicines</th>
+                      <th style={{width:'62%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Matched Rubrics</th>
+                      <th style={{width:'10%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Modalities</th>
+                      <th style={{width:'10%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 text-right">Synonyms</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 align-top bg-white">
@@ -802,14 +807,14 @@ export default function RubricsPage() {
                       return (
                         <tr key={chapter.id} className="bg-white hover:bg-gray-50 transition-colors">
                           {/* Chapter */}
-                          <td className="p-4 bg-white">
+                          <td className="p-4 bg-white border-r border-gray-200">
                             <p className="font-bold text-gray-900">{chapter.name}</p>
                             {chapter.name_hindi && <p className="text-xs text-indigo-600 mt-1">{chapter.name_hindi}</p>}
                             <p className="text-[10px] font-bold text-gray-400 uppercase mt-2">{result.total_matched} matches</p>
                           </td>
 
                           {/* Medicine */}
-                          <td className="p-4 bg-white">
+                          <td className="p-4 bg-white border-r border-gray-200">
                             <div className="flex flex-col gap-2">
                               {result.medicine_chart.slice(0, 4).map((med) => (
                                 <div key={med.id} className="flex justify-between items-start gap-2">
@@ -821,14 +826,45 @@ export default function RubricsPage() {
                                   </span>
                                 </div>
                               ))}
+                              {isExpanded && result.medicine_chart.slice(4, 15).map((med) => (
+                                <div key={med.id} className="flex justify-between items-start gap-2 animate-in slide-in-from-top-2 duration-300">
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-gray-800 leading-tight break-words">{med.name}</p>
+                                  </div>
+                                  <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                                    {med.occurrences}
+                                  </span>
+                                </div>
+                              ))}
+                              {result.medicine_chart.length > 4 && (
+                                <button 
+                                  onClick={() => {
+                                    setExpandedRows(prev => {
+                                      const next = new Set(prev);
+                                      if (isExpanded) next.delete(chapter.id);
+                                      else next.add(chapter.id);
+                                      return next;
+                                    });
+                                  }}
+                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors mt-1"
+                                >
+                                  {isExpanded ? "Show Less" : `+ ${result.medicine_chart.length - 4} more`}
+                                </button>
+                              )}
                             </div>
                           </td>
 
                           {/* Matched Rubrics */}
-                          <td className="p-4 bg-white">
+                          <td className="p-4 bg-white border-r border-gray-200">
                             <div className="flex flex-col gap-3">
                               {visibleRubrics.map(rb => (
                                 <div key={rb.id} className="bg-gray-50 rounded-lg p-3 border border-gray-100 shadow-sm">
+                                  <p className="text-sm md:text-base font-bold text-gray-800 leading-snug break-words">{rb.full_path || rb.name}</p>
+                                  {rb.name_hindi && <p className="text-xs text-orange-600 mt-1 break-words">{rb.name_hindi}</p>}
+                                </div>
+                              ))}
+                              {allRubrics.length > 1 && isExpanded && allRubrics.slice(1).map(rb => (
+                                <div key={rb.id} className="bg-gray-50 rounded-lg p-3 border border-gray-100 shadow-sm animate-in slide-in-from-top-2 duration-300">
                                   <p className="text-sm md:text-base font-bold text-gray-800 leading-snug break-words">{rb.full_path || rb.name}</p>
                                   {rb.name_hindi && <p className="text-xs text-orange-600 mt-1 break-words">{rb.name_hindi}</p>}
                                 </div>
@@ -852,7 +888,7 @@ export default function RubricsPage() {
                           </td>
 
                           {/* Modalities */}
-                          <td className="p-4 bg-white">
+                          <td className="p-1 bg-white border-r border-gray-200">
                             <div className="flex flex-col gap-3">
                               {aggravationPairs.length > 0 && (
                                 <div>
@@ -885,7 +921,7 @@ export default function RubricsPage() {
                           </td>
 
                           {/* Synonyms */}
-                          <td className="p-4 align-top text-right bg-white">
+                          <td className="p-1 align-top text-right bg-white">
                             <div className="flex flex-wrap gap-1 justify-end">
                               {synonymPairs.length > 0 ? synonymPairs.map((s, i) => (
                                 <span key={i} className="px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded text-[10px] border border-amber-200 inline-block break-words font-semibold">
