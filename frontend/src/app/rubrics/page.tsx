@@ -52,7 +52,7 @@ const KEYWORD_INDEX: Record<string, string> = {
   "दाँत":"Teeth","मसूड़":"Teeth",
   // Throat
   throat:"Throat",tonsil:"Throat",swallow:"Throat",pharynx:"Throat",hoarse:"Throat",
-  "गला":"Throat","गले":"Throat",
+  "गला":"Throat","गले":"Throat","टॉन्सिल":"Throat",
   // Face (chapter in DB)
   face:"Face",
   "चेहरा":"Face","चेहरे":"Face","गाल":"Face","ठुड़ड़ी":"Face",
@@ -406,8 +406,8 @@ export default function RubricsPage() {
           // Check probe cache first
           if (probeCache.current.has(sym)) return probeCache.current.get(sym)!;
 
-          // Tokenize symptom
-          const tokens = sym.toLowerCase().split(/[\s,]+/).filter(t => t.length >= 3);
+          // Tokenize symptom: split on spaces, commas, pipe, Hindi danda, periods, etc.
+          const tokens = sym.toLowerCase().split(/[\s,।|.:;!?]+/).filter(t => t.length >= 3);
           
           // Score each token against the keyword index
           const scores: Record<string, number> = {};
