@@ -8033,25 +8033,132 @@ def doctor_rubric_repertorize(request):
                 return JsonResponse({'error': 'Chapter not found'}, status=404)
 
         # ── Step 2: Single-Pass Candidate Collection ───────────────────────────
-        # To avoid multiple full-table scans which cause timeouts, we collect all unique tokens
-        # and do exactly ONE database query to find the top candidates.
+        # Hindi → English medical term translation map.
+        # Allows Hindi symptom tokens to match English rubric names in the DB.
+        HINDI_EN_MAP = {
+            'नस':           ['nerve', 'neural', 'neuralgic', 'neuralgia'],
+            'नसों':         ['nerve', 'neural', 'neuralgic', 'neuralgia'],
+            'नसें':         ['nerve', 'neural'],
+            'नसे':          ['nerve', 'neural'],
+            'तंत्रिका':     ['nerve', 'neural', 'neuralgic', 'neuralgia'],
+            'तंत्रिकाओं':   ['nerve', 'neural', 'neuralgic', 'neuralgia'],
+            'दर्द':         ['pain', 'ache', 'painful', 'aching'],
+            'पीड़ा':        ['pain', 'ache', 'suffering'],
+            'तेज':          ['sharp', 'severe', 'intense', 'shooting'],
+            'तीव्र':        ['intense', 'severe', 'violent'],
+            'अत्यधिक':      ['excessive', 'extreme', 'much', 'severe'],
+            'जलन':          ['burning', 'burn', 'smarting'],
+            'सुन्न':         ['numbness', 'numb', 'insensible'],
+            'सुन्नपन':      ['numbness', 'numb', 'insensible'],
+            'झनझनाहट':     ['tingling', 'formication', 'crawling'],
+            'ऐंठन':         ['cramp', 'spasm', 'convulsion'],
+            'खिंचाव':       ['pulling', 'tearing', 'drawing'],
+            'थकान':         ['fatigue', 'weakness', 'exhaustion', 'weariness'],
+            'थकावट':        ['fatigue', 'weakness', 'exhaustion'],
+            'कमज़ोरी':      ['weakness', 'debility', 'prostration'],
+            'कमजोरी':       ['weakness', 'debility', 'prostration'],
+            'सूजन':         ['swelling', 'edema', 'inflammation', 'tumefaction'],
+            # Nervous system specific
+            'लकवा':        ['paralysis', 'paresis', 'hemiplegia'],
+            'पक्षाघात':     ['paralysis', 'paresis', 'hemiplegia'],
+            'मिर्गी':        ['epilepsy', 'convulsion', 'fit'],
+            'दौरा':         ['convulsion', 'fit', 'epilepsy', 'spasm'],
+            'कंपन':        ['trembling', 'tremor', 'shaking'],
+            'कंप':          ['trembling', 'tremor', 'shaking'],
+            'बेहोशी':       ['unconscious', 'fainting', 'syncope'],
+            'सिर':          ['head'],
+            'सिरदर्द':      ['headache'],
+            'माथा':         ['forehead'],
+            'आँख':          ['eye'],
+            'कान':          ['ear'],
+            'नाक':          ['nose'],
+            'गला':          ['throat'],
+            'पेट':          ['stomach', 'abdomen'],
+            'छाती':         ['chest'],
+            'पीठ':          ['back'],
+            'हाथ':          ['hand', 'arm'],
+            'पैर':          ['leg', 'foot'],
+            'बुखार':        ['fever'],
+            'खाँसी':        ['cough'],
+            'साँस':         ['breath', 'respiration'],
+            'कब्ज':         ['constipation'],
+            'दस्त':         ['diarrhea', 'loose'],
+            'पेशाब':        ['urine', 'urination'],
+            'नींद':         ['sleep', 'sleeplessness', 'insomnia'],
+            'भूख':          ['appetite'],
+            'प्यास':        ['thirst'],
+            'चिंता':        ['anxiety'],
+            'डर':           ['fear'],
+            'गुस्सा':       ['anger', 'irritability'],
+            'त्वचा':        ['skin'],
+            'खुजली':        ['itching', 'pruritus'],
+            'पसीना':        ['perspiration', 'sweat'],
+            'खून':          ['blood', 'bleeding'],
+            'रक्त':         ['blood', 'bleeding'],
+            'जोड़':          ['joint', 'articulation'],
+            'जोड़ों':        ['joint', 'articulation'],
+            'हड्डी':        ['bone'],
+            'मांसपेशी':     ['muscle'],
+            'अचानक':        ['sudden', 'paroxysmal'],
+            'रात':          ['night', 'nocturnal'],
+            'सुबह':         ['morning'],
+            'शाम':          ['evening'],
+        }
+
+        # Collect all raw tokens from every sub-symptom
         all_tokens = set()
         for sym_part in all_sub_symptoms:
             tokens = sentence_tokens.get(str(sym_part), [])
             all_tokens.update(tokens)
 
+        # Expand Hindi tokens to their English equivalents
+        expanded_tokens = set(all_tokens)
+        for tok in all_tokens:
+            for en_tok in HINDI_EN_MAP.get(tok, []):
+                expanded_tokens.add(en_tok)
+
+        # Hindi morphological root expansion:
+        # Many rubric name_hindi fields use the root form (e.g. "नस") while
+        # user input uses an inflected form (e.g. "नसों", "नसें").
+        # Adding the root allows icontains to find both.
+        HINDI_ROOT_MAP = {
+            # Nerves
+            'नसों': 'नस', 'नसें': 'नस', 'नसे': 'नस',
+            'तंत्रिकाओं': 'तंत्रिका', 'तंत्रिकाएं': 'तंत्रिका',
+            # Joints
+            'जोड़ों': 'जोड़', 'जोड़ो': 'जोड़',
+            # Muscles
+            'मांसपेशियों': 'मांसपेशी', 'मांसपेशियाँ': 'मांसपेशी',
+            # Bones
+            'हड्डियों': 'हड्डी', 'हड्डियाँ': 'हड्डी',
+            # Eyes
+            'आँखों': 'आँख', 'आंखों': 'आंख',
+            # Ears
+            'कानों': 'कान',
+            # Hands/feet
+            'हाथों': 'हाथ', 'पैरों': 'पैर',
+            # Common verb inflections used in symptom names
+            'होती': 'होता', 'होते': 'होता',
+            'रहती': 'रहता', 'रहते': 'रहता',
+        }
+        for tok in list(all_tokens):
+            root = HINDI_ROOT_MAP.get(tok)
+            if root:
+                expanded_tokens.add(root)
+
         candidate_ids = set()
-        if all_tokens:
+        if expanded_tokens:
             combined_q = Q()
-            for tok in all_tokens:
+            for tok in expanded_tokens:
                 combined_q |= (
                     Q(name__icontains=tok) |
                     Q(name_hindi__icontains=tok) |
-                    Q(synonyms__synonym__icontains=tok)
+                    Q(description_hindi__icontains=tok) |
+                    Q(synonyms__synonym__icontains=tok) |
+                    Q(synonyms__synonym_hindi__icontains=tok)
                 )
-            
+
             # Fetch up to 200 candidate IDs in ONE database query.
-            # This is extremely fast because it only scans the table once.
             part_matches = base_qs.filter(combined_q).values_list('id', flat=True)[:200]
             candidate_ids.update(part_matches)
 
@@ -8090,24 +8197,23 @@ def doctor_rubric_repertorize(request):
 
             for term in symptoms:
                 term_matched = False
-                
-                # Check English core columns
+
+                # English equivalents for this Hindi token (may be empty for English tokens)
+                en_equivalents = HINDI_EN_MAP.get(term, [])
+
+                # ── Check original term against all fields ──────────────────
                 if term in rubric_name_lower:
                     score += WEIGHTS['name']
                     term_matched = True
                 if term in rubric_desc_lower:
                     score += WEIGHTS['description']
                     term_matched = True
-                    
-                # Check Hindi core columns
                 if term in rubric_hindi_lower:
                     score += WEIGHTS['hindi']
                     term_matched = True
                 if term in desc_hindi_lower:
                     score += WEIGHTS['description']
                     term_matched = True
-                    
-                # Check English + Hindi Synonyms
                 for syn in synonym_texts:
                     if term in syn:
                         score += WEIGHTS['synonym']
@@ -8118,8 +8224,6 @@ def doctor_rubric_repertorize(request):
                         score += WEIGHTS['synonym']
                         term_matched = True
                         break
-
-                # Check English + Hindi Modalities (Aggravations / Ameliorations)
                 for mod in modality_texts:
                     if term in mod:
                         score += WEIGHTS['modality']
@@ -8130,6 +8234,29 @@ def doctor_rubric_repertorize(request):
                         score += WEIGHTS['modality']
                         term_matched = True
                         break
+
+                # ── Also check English equivalents of Hindi tokens ──────────
+                # This ensures "नसों" → "nerve" matches English rubric names.
+                if not term_matched and en_equivalents:
+                    for en_tok in en_equivalents:
+                        if en_tok in rubric_name_lower:
+                            score += WEIGHTS['name']
+                            term_matched = True
+                        if en_tok in rubric_desc_lower:
+                            score += WEIGHTS['description']
+                            term_matched = True
+                        for syn in synonym_texts:
+                            if en_tok in syn:
+                                score += WEIGHTS['synonym']
+                                term_matched = True
+                                break
+                        for mod in modality_texts:
+                            if en_tok in mod:
+                                score += WEIGHTS['modality']
+                                term_matched = True
+                                break
+                        if term_matched:
+                            break
 
                 if term_matched:
                     matched_symptoms.append(term)
