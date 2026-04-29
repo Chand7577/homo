@@ -128,7 +128,10 @@ const KEYWORD_INDEX: Record<string, string> = {
   // Skin
   skin:"Skin",rash:"Skin",eruption:"Skin",itch:"Skin",eczema:"Skin",
   urticaria:"Skin",psoriasis:"Skin",acne:"Skin",hive:"Skin",
-  "त्वचा":"Skin","खुजली":"Skin","दाद":"Skin","चर्मरोग":"Skin",
+  "त्वचा":"Skin","खुजली":"Skin","दाद":"Skin","चर्मरोग":"Skin","दाने":"Skin","फुंसी":"Skin",
+  // Hairs
+  hair:"Hairs",dandruff:"Hairs",alopecia:"Hairs",
+  "बाल":"Hairs","बालों":"Hairs","रूसी":"Hairs",
   // Fever
   fever:"Fever",chill:"Fever",ague:"Fever",
   "बुखार":"Fever","ठंड":"Fever","ताप":"Fever",
@@ -152,6 +155,13 @@ const KEYWORD_INDEX: Record<string, string> = {
   "कमज़ोरी":"Generalities","पसीना":"Generalities",
   "थकान":"Generalities","थकावट":"Generalities","कमजोरी":"Generalities",
 } as Record<string, string>;
+
+// Exact phrase index to override single-word tokens
+const PHRASE_INDEX: Record<string, string> = {
+  "सिर पर दाने": "Hairs",
+  "बालों में": "Hairs",
+  "बालों का": "Hairs",
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Chapter { id: number; name: string; name_hindi?: string; }
@@ -402,12 +412,22 @@ export default function RubricsPage() {
         //         fall back to an API probe — and cache that result.
         const chapterSymMap: Record<number, { chapter: Chapter; syms: string[] }> = {};
 
-        const resolveChapterName = async (sym: string): Promise<string | null> => {
+        const resolveChapterName = async (sym: string): Promise<string[]> => {
           // Check probe cache first
-          if (probeCache.current.has(sym)) return probeCache.current.get(sym)!;
+          if (probeCache.current.has(sym)) return [probeCache.current.get(sym)!];
+
+          const lowerSym = sym.toLowerCase();
+
+          // Check exact phrase matches first
+          for (const [phrase, chName] of Object.entries(PHRASE_INDEX)) {
+            if (lowerSym.includes(phrase.toLowerCase())) {
+              probeCache.current.set(sym, chName);
+              return [chName];
+            }
+          }
 
           // Tokenize symptom: split on spaces, commas, pipe, Hindi danda, periods, etc.
-          const tokens = sym.toLowerCase().split(/[\s,।|.:;!?]+/).filter(t => t.length >= 3);
+          const tokens = lowerSym.split(/[\s,।|.:;!?]+/).filter(t => t.length >= 3);
           
           // Score each token against the keyword index
           const scores: Record<string, number> = {};
@@ -429,10 +449,12 @@ export default function RubricsPage() {
           }
 
           if (Object.keys(scores).length > 0) {
-            // Pick the highest scoring chapter
-            const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
-            probeCache.current.set(sym, best);
-            return best;
+            // Return all chapters that are tied or very close to the top score
+            const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+            const topScore = sorted[0][1];
+            const bestChapters = sorted.filter(s => topScore - s[1] <= 4).map(s => s[0]);
+            probeCache.current.set(sym, bestChapters[0]); // Cache the primary one
+            return bestChapters;
           }
 
           // Fallback: single API probe (only for completely unknown terms)
@@ -442,33 +464,38 @@ export default function RubricsPage() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ symptoms: [sym], top_n: 1 }),
             });
-            if (!res.ok) return null;
+            if (!res.ok) return [];
             const data = await res.json();
-            if (!data.success || !data.top_rubrics?.length) return null;
+            if (!data.success || !data.top_rubrics?.length) return [];
             const rootName = (data.top_rubrics[0].full_path || "").split(">")[0].trim();
             probeCache.current.set(sym, rootName); // Cache for next time
-            return rootName;
+            return [rootName];
           } catch {
-            return null;
+            return [];
           }
         };
 
         // Resolve all symptoms in parallel
         const resolved = await Promise.all(
-          globalSymptoms.map(async sym => ({ sym, rootName: await resolveChapterName(sym) }))
+          globalSymptoms.map(async sym => ({ sym, rootNames: await resolveChapterName(sym) }))
         );
 
         // Group symptoms by matched chapter
-        for (const { sym, rootName } of resolved) {
-          if (!rootName) continue;
-          const matched = chapters.find(ch =>
-            ch.name.toLowerCase() === rootName.toLowerCase() ||
-            ch.name.toLowerCase().includes(rootName.toLowerCase()) ||
-            rootName.toLowerCase().includes(ch.name.toLowerCase())
-          );
-          if (!matched) continue;
-          if (!chapterSymMap[matched.id]) chapterSymMap[matched.id] = { chapter: matched, syms: [] };
-          chapterSymMap[matched.id].syms.push(sym);
+        for (const { sym, rootNames } of resolved) {
+          if (!rootNames || rootNames.length === 0) continue;
+          
+          for (const rootName of rootNames) {
+            const matched = chapters.find(ch =>
+              ch.name.toLowerCase() === rootName.toLowerCase() ||
+              ch.name.toLowerCase().includes(rootName.toLowerCase()) ||
+              rootName.toLowerCase().includes(ch.name.toLowerCase())
+            );
+            if (!matched) continue;
+            if (!chapterSymMap[matched.id]) chapterSymMap[matched.id] = { chapter: matched, syms: [] };
+            if (!chapterSymMap[matched.id].syms.includes(sym)) {
+              chapterSymMap[matched.id].syms.push(sym);
+            }
+          }
         }
 
         const chaptersToQuery = Object.values(chapterSymMap);
