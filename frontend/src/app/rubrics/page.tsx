@@ -110,7 +110,7 @@ const KEYWORD_INDEX: Record<string, string> = {
   "जोड़":"Extremities","जोड़ों":"Extremities","ऐंठन":"Extremities",
   // Locomotor (chapter in DB)
   locomotor:"Locomotor",bone:"Locomotor",
-  "हड्डी":"Locomotor","हड्डियाँ":"Locomotor",
+  "हड्डी":"Locomotor","हड्डियाँ":"Locomotor","चरचराहट":"Locomotor",
   // Musculo (chapter in DB)
   muscle:"Musculo",muscular:"Musculo",
   "मांसपेशी":"Musculo","मांसपेशियाँ":"Musculo",

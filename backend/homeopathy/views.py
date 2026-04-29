@@ -8162,7 +8162,7 @@ def doctor_rubric_repertorize(request):
             'ठंडा': 'cold',         'ठंडी': 'cold',
             # Motion
             'चलने': 'motion',       'चलना': 'motion',
-            'चलने से': 'motion',  'हिलने': 'motion',
+            'चलने से': 'motion',  'हिलने': 'motion', 'हिलाने': 'motion',
             'आराम': 'rest',         'लेटने': 'lying',
             'बैठने': 'sitting',     'खड़े': 'standing',
             # Pressure
