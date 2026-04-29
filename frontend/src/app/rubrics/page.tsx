@@ -52,10 +52,10 @@ const KEYWORD_INDEX: Record<string, string> = {
   "दाँत":"Teeth","मसूड़":"Teeth",
   // Throat
   throat:"Throat",tonsil:"Throat",swallow:"Throat",pharynx:"Throat",hoarse:"Throat",
-  "गला":"Throat",
+  "गला":"Throat","गले":"Throat",
   // Face (chapter in DB)
   face:"Face",
-  "चेहरा":"Face","गाल":"Face","ठुड़ड़ी":"Face",
+  "चेहरा":"Face","चेहरे":"Face","गाल":"Face","ठुड़ड़ी":"Face",
   // Stomach
   stomach:"Stomach",nausea:"Stomach",vomit:"Stomach",gastric:"Stomach",
   appetite:"Stomach",hunger:"Stomach",eructation:"Stomach",heartburn:"Stomach",
@@ -80,7 +80,7 @@ const KEYWORD_INDEX: Record<string, string> = {
   "वृक्क":"Kidney","गुर्दा":"Kidney","गुर्दे":"Kidney",
   // Chest
   chest:"Chest",lung:"Chest",breast:"Chest",
-  "छाती":"Chest","फेफड़ा":"Chest",
+  "छाती":"Chest","फेफड़ा":"Chest","फेफड़े":"Chest",
   // Heart (separate chapter in DB)
   heart:"Heart",palpitat:"Heart",cardiac:"Heart",
   "हृदय":"Heart","दिल":"Heart","धड़कन":"Heart",

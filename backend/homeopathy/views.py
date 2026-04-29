@@ -8147,9 +8147,66 @@ def doctor_rubric_repertorize(request):
                 expanded_tokens.add(root)
 
         candidate_ids = set()
-        if expanded_tokens:
+
+        # ── Modality keyword detection ────────────────────────────────────────
+        # Maps Hindi/English modality phrases to searchable English terms.
+        # These are aggravations (worse from) or ameliorations (better from).
+        MODALITY_KEYWORD_MAP = {
+            # Time modalities
+            'रात': 'night',         'रात्र': 'night',
+            'सुबह': 'morning',       'सुबह सवेरे': 'morning',
+            'शाम': 'evening',       'दोपहर': 'afternoon',
+            # Temperature
+            'गर्मी': 'heat',         'गर्म': 'warmth',
+            'ठंड': 'cold',         'ठंडक': 'cold',
+            'ठंडा': 'cold',         'ठंडी': 'cold',
+            # Motion
+            'चलने': 'motion',       'चलना': 'motion',
+            'चलने से': 'motion',  'हिलने': 'motion',
+            'आराम': 'rest',         'लेटने': 'lying',
+            'बैठने': 'sitting',     'खड़े': 'standing',
+            # Pressure
+            'दबाने': 'pressure',    'दबाव': 'pressure',
+            # Food/drink
+            'खाने': 'eating',       'खाने से': 'eating',
+            'पानी': 'drinking',     'पीने': 'drinking',
+            # Weather
+            'बरसात': 'damp',        'नमी': 'humidity',
+            'सर्दी': 'cold',        'धूप': 'sun',
+            # Touch
+            'छूने': 'touch',        'छूने से': 'touch',
+            # Emotions
+            'तनाव': 'stress',       'गुस्से': 'anger',
+            # English modality keywords
+            'worse': 'worse',    'better': 'better',
+            'night': 'night',    'morning': 'morning',
+            'heat': 'heat',      'cold': 'cold',
+            'motion': 'motion',  'rest': 'rest',
+            'pressure': 'pressure', 'touch': 'touch',
+            'eating': 'eating',  'lying': 'lying',
+            'sitting': 'sitting', 'standing': 'standing',
+            'warmth': 'warmth',  'damp': 'damp',
+            'exertion': 'exertion', 'walking': 'walking',
+            'warm': 'warmth',    'wet': 'damp',
+        }
+
+        # Separate modality tokens from symptom tokens
+        modality_tokens = set()
+        symptom_tokens  = set(expanded_tokens)
+        for tok in list(expanded_tokens):
+            if tok in MODALITY_KEYWORD_MAP:
+                modality_tokens.add(MODALITY_KEYWORD_MAP[tok])
+                symptom_tokens.discard(tok)   # remove from symptom search
+
+        # Also check raw all_tokens for modality keywords
+        for tok in all_tokens:
+            if tok in MODALITY_KEYWORD_MAP:
+                modality_tokens.add(MODALITY_KEYWORD_MAP[tok])
+
+        # Build candidate query from symptom tokens
+        if symptom_tokens:
             combined_q = Q()
-            for tok in expanded_tokens:
+            for tok in symptom_tokens:
                 combined_q |= (
                     Q(name__icontains=tok) |
                     Q(name_hindi__icontains=tok) |
@@ -8157,10 +8214,29 @@ def doctor_rubric_repertorize(request):
                     Q(synonyms__synonym__icontains=tok) |
                     Q(synonyms__synonym_hindi__icontains=tok)
                 )
-
-            # Fetch up to 200 candidate IDs in ONE database query.
             part_matches = base_qs.filter(combined_q).values_list('id', flat=True)[:200]
             candidate_ids.update(part_matches)
+
+        # If modality tokens exist, also find rubrics by their modalities
+        if modality_tokens:
+            mod_q = Q()
+            for mtok in modality_tokens:
+                mod_q |= (
+                    Q(modalities__name__icontains=mtok) |
+                    Q(modalities__name_hindi__icontains=mtok)
+                )
+            mod_matches = base_qs.filter(mod_q).values_list('id', flat=True)[:200]
+            if symptom_tokens:
+                # Intersect: only keep rubrics that matched BOTH symptom AND modality
+                mod_match_set = set(mod_matches)
+                if mod_match_set:
+                    candidate_ids = candidate_ids & mod_match_set
+                    # If intersection is empty (no overlap), fall back to union
+                    if not candidate_ids:
+                        candidate_ids.update(mod_match_set)
+            else:
+                # Modality-only search: use modality matches as sole candidates
+                candidate_ids.update(mod_matches)
 
         if not candidate_ids:
             return JsonResponse({'success': True, 'total_matched': 0, 'top_rubrics': [], 'medicine_chart': [], 'symptoms_breakdown': []})
@@ -8174,9 +8250,12 @@ def doctor_rubric_repertorize(request):
             'name':        10,
             'description':  5,
             'synonym':      7,
-            'modality':     6,
-            'hindi':        8,  # Increased weight so Hindi matches rank nicely
+            'modality':     9,   # raised: modality match is clinically significant
+            'hindi':        8,
         }
+
+        # Pre-compute modality terms for scoring
+        scored_modality_tokens = modality_tokens  # already extracted above
 
         scored = []
         for rubric in matched_rubrics:
@@ -8236,7 +8315,6 @@ def doctor_rubric_repertorize(request):
                         break
 
                 # ── Also check English equivalents of Hindi tokens ──────────
-                # This ensures "नसों" → "nerve" matches English rubric names.
                 if not term_matched and en_equivalents:
                     for en_tok in en_equivalents:
                         if en_tok in rubric_name_lower:
@@ -8257,6 +8335,23 @@ def doctor_rubric_repertorize(request):
                                 break
                         if term_matched:
                             break
+
+                if term_matched:
+                    matched_terms.append(term)
+                    matched_symptoms.append(term)
+
+            # ── Dedicated modality scoring pass ────────────────────────────
+            # Score bonus points for each matched modality keyword.
+            # This ensures rubrics with matching modalities rank higher.
+            for mtok in scored_modality_tokens:
+                for mod in modality_texts:
+                    if mtok in mod:
+                        score += WEIGHTS['modality']
+                        break
+                for mod_hi in modality_hindi_texts:
+                    if mtok in mod_hi:
+                        score += WEIGHTS['modality']
+                        break
 
                 if term_matched:
                     matched_symptoms.append(term)
