@@ -33,10 +33,10 @@ const KEYWORD_INDEX: Record<string, string> = {
   "चक्कर":"Vertigo","घबराहट":"Vertigo",
   // Eyes
   eye:"Eyes",cornea:"Eyes",conjunctiv:"Eyes",lachrymation:"Eyes",photophobia:"Eyes",
-  "आँख":"Eyes","आंख":"Eyes",
+  "आँख":"Eyes","आंख":"Eyes","आँखों":"Eyes",
   // Vision (separate chapter in DB)
   vision:"Vision",sight:"Vision",
-  "नजर":"Vision","दृष्टि":"Vision",
+  "नजर":"Vision","दृष्टि":"Vision","दिखना":"Vision","दिखाई":"Vision","धुंधला":"Vision",
   // Ears
   ear:"Ears",tinnitus:"Ears",deafness:"Ears",otitis:"Ears","कान":"Ears",
   // Hearing (separate chapter in DB)
