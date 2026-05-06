@@ -19,7 +19,7 @@ import {
   Pill,
 } from "lucide-react";
 
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 const DataBackup = () => {
   const [loading, setLoading] = useState(false);

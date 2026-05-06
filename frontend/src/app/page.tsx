@@ -28,7 +28,7 @@ import {
 import CreateCaseModal from "@/components/CreateCaseModal";
 import CaseDetailModal from "@/components/CaseDetailModal";
 
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 interface DoctorProfile {
   id: number;

@@ -33,7 +33,7 @@ import {
   Inbox,
 } from "lucide-react";
 
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 // Indian Cities Data
 const INDIAN_CITIES = [

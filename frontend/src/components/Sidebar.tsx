@@ -1,8 +1,6 @@
 // @ts-nocheck
 "use client";
 
-import { API_BASE } from "@/config";
-
 import React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
@@ -41,7 +39,7 @@ const AdminSidebar = () => {
     try {
       // Call backend logout endpoint
       const res = await fetch(
-        `${API_BASE}/admin/logout/`,
+        "https://homo-backend-sumy.onrender.com/homeopathy/admin/logout/",
         {
           method: "POST",
           credentials: "include",

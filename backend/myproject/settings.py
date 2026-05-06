@@ -61,7 +61,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "homeopathy.middleware.BypassAuthMiddleware",
 ]
 
 
@@ -257,13 +256,11 @@ SESSION_COOKIE_NAME = "sessionid"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # 7 days
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_COOKIE_HTTPONLY = True
-# If not on Render and in DEBUG mode, allow non-HTTPS cookies
-IS_RENDER = os.environ.get('RENDER')
-SESSION_COOKIE_SECURE = True if IS_RENDER else not DEBUG
-CSRF_COOKIE_SECURE = True if IS_RENDER else not DEBUG
-SESSION_COOKIE_SAMESITE = "None" if IS_RENDER else "Lax"
-CSRF_COOKIE_SAMESITE = "None" if IS_RENDER else "Lax"
-SESSION_COOKIE_DOMAIN = None
+SESSION_COOKIE_SAMESITE = "None"  
+SESSION_COOKIE_SECURE = True  
+CSRF_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_DOMAIN = None  
 
 
 REST_FRAMEWORK = {

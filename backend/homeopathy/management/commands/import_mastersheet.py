@@ -48,24 +48,17 @@ def parse_bilingual(text, sep=None):
 
 
 def import_rubric_row(chapter_name, rubric_name, rubric_hindi, sub_rubric,
-                       syn_text, agg_text, amel_text, med_text, history=None, caches=None):
+                       syn_text, agg_text, amel_text, med_text, history=None):
     """Create/update a single rubric row with all related data."""
-    if caches is None:
-        caches = {'chapters': {}, 'medicines': {}}
     if not rubric_name:
         return False
 
     # 1. Chapter (level 0)
-    ch_name = chapter_name.strip().title()
-    if ch_name in caches['chapters']:
-        chapter = caches['chapters'][ch_name]
-    else:
-        chapter, _ = Rubric.objects.get_or_create(
-            name=ch_name,
-            level=0,
-            defaults={'is_active': True, 'source_import': history}
-        )
-        caches['chapters'][ch_name] = chapter
+    chapter, _ = Rubric.objects.get_or_create(
+        name=chapter_name.strip().title(),
+        level=0,
+        defaults={'is_active': True, 'source_import': history}
+    )
 
     # 2. Main Rubric (level 1)
     rubric, created = Rubric.objects.get_or_create(
@@ -112,42 +105,17 @@ def import_rubric_row(chapter_name, rubric_name, rubric_hindi, sub_rubric,
     # 6. Medicines (separated by ;)
     med_count = 0
     if med_text:
-        import re
-        for med_item in med_text.split(';'):
-            med_item = med_item.strip()
-            if not med_item:
-                continue
-
-            grade = 3
-            med_name = med_item
-            
-            # Look for explicit grade like (3), [2], {1}
-            match = re.search(r'[\(\[\{](\d+)[\)\]\}]', med_item)
-            if match:
-                grade = int(match.group(1))
-                med_name = re.sub(r'[\(\[\{]\d+[\)\]\}]', '', med_item).strip()
-            else:
-                # Look for grade at the very end like "Ars 2"
-                match = re.search(r'\b(\d+)\s*$', med_item)
-                if match:
-                    grade = int(match.group(1))
-                    med_name = re.sub(r'\b\d+\s*$', '', med_item).strip()
-            
+        for med_name in med_text.split(';'):
+            med_name = med_name.strip()
             if not med_name:
                 continue
-
-            if med_name in caches['medicines']:
-                medicine = caches['medicines'][med_name]
-            else:
-                medicine, _ = Medicine.objects.get_or_create(
-                    name=med_name,
-                    defaults={'latin_name': med_name, 'source_import': history}
-                )
-                caches['medicines'][med_name] = medicine
-
+            medicine, _ = Medicine.objects.get_or_create(
+                name=med_name,
+                defaults={'latin_name': med_name, 'source_import': history}
+            )
             RubricMedicineGrade.objects.get_or_create(
                 rubric=rubric, medicine=medicine,
-                defaults={'grade': grade, 'source_import': history}
+                defaults={'grade': 3, 'source_import': history}
             )
             med_count += 1
 
@@ -190,10 +158,6 @@ class Command(BaseCommand):
 
         for sheet_name, df in all_sheets_raw.items():
             chapter_name = sheet_name.strip().lower()
-            
-            # Init caches once per script run to speed up drastically
-            if not hasattr(self, 'import_caches'):
-                self.import_caches = {'chapters': {}, 'medicines': {}}
             
             # Skip non-rubric sheets
             if any(k in chapter_name for k in ['instruction', 'index', 'template', 'summary']):
@@ -241,7 +205,7 @@ class Command(BaseCommand):
 
                         med_count = import_rubric_row(
                             ch, rubric_name, rubric_hindi, sub_rubric,
-                            syn_text, agg_text, amel_text, med_text, history=history, caches=self.import_caches
+                            syn_text, agg_text, amel_text, med_text, history=history
                         )
                         if med_count is not False:
                             sheet_rubrics += 1

@@ -17,7 +17,7 @@ import {
   Badge,
 } from "lucide-react";
 
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 interface Doctor {
   id: number;

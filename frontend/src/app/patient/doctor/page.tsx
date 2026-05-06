@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 
 // API Configuration
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 // API Functions
 const doctorAPI = {

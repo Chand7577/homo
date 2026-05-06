@@ -29,7 +29,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 // Change Password Modal
 const ChangePasswordModal = ({ isOpen, onClose }) => {

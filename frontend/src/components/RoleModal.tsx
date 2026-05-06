@@ -17,7 +17,7 @@ interface RoleModalProps {
   onSelect: (role: UserRole) => void;
 }
 
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 export default function RoleModal({ onSelect }: RoleModalProps) {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
@@ -505,19 +505,7 @@ export default function RoleModal({ onSelect }: RoleModalProps) {
                   return (
                     <button
                       key={role.id}
-                      onClick={() => {
-                        // Bypassing authentication
-                        const mockUser = { 
-                          id: 1, 
-                          name: `Demo ${role.label}`, 
-                          email: `${role.id}@example.com`,
-                          specialization: "General Practice"
-                        };
-                        localStorage.setItem("userRole", role.id);
-                        localStorage.setItem("user", JSON.stringify(mockUser));
-                        localStorage.setItem("roleTimestamp", Date.now().toString());
-                        onSelect(role.id);
-                      }}
+                      onClick={() => setSelectedRole(role.id)}
                       className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-gray-200 hover:border-gray-900 hover:bg-gray-50 active:bg-gray-100 active:border-gray-900 transition-all text-left group touch-manipulation"
                     >
                       <div className="flex items-center gap-3 sm:gap-4">

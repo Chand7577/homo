@@ -243,7 +243,8 @@ def send_patient_account_email(patient, password):
 def require_admin(view_func):
     """Decorator to check if user is authenticated admin"""
     def wrapper(request, *args, **kwargs):
-        # Bypass admin check
+        if not request.session.get('is_admin'):
+            return JsonResponse({'error': 'Unauthorized. Admin access required.'}, status=403)
         return view_func(request, *args, **kwargs)
     return wrapper
 
@@ -251,12 +252,8 @@ def require_admin(view_func):
 def require_doctor(view_func):
     """Decorator to check if user is authenticated doctor"""
     def wrapper(request, *args, **kwargs):
-        # Bypass doctor check
-        if not request.session.get('is_doctor'):
-            doctor = Doctor.objects.first()
-            if doctor:
-                request.session['is_doctor'] = True
-                request.session['doctor_id'] = doctor.id
+        if not request.user.is_authenticated or request.user.user_type != 'doctor':
+            return JsonResponse({'error': 'Unauthorized. Doctor access required.'}, status=403)
         return view_func(request, *args, **kwargs)
     return wrapper
 
@@ -264,12 +261,8 @@ def require_doctor(view_func):
 def require_patient(view_func):
     """Decorator to check if user is authenticated patient"""
     def wrapper(request, *args, **kwargs):
-        # Bypass patient check
-        if not request.session.get('is_patient'):
-            patient = Patient.objects.first()
-            if patient:
-                request.session['is_patient'] = True
-                request.session['patient_id'] = patient.id
+        if not request.user.is_authenticated or request.user.user_type != 'patient':
+            return JsonResponse({'error': 'Unauthorized. Patient access required.'}, status=403)
         return view_func(request, *args, **kwargs)
     return wrapper
 
@@ -277,7 +270,10 @@ def require_patient(view_func):
 def require_admin_or_doctor(view_func):
     """Decorator to check if user is admin or doctor"""
     def wrapper(request, *args, **kwargs):
-        # Bypass admin or doctor check
+        is_admin = request.session.get('is_admin', False)
+        is_doctor = request.session.get('doctor_id') is not None
+        if not (is_admin or is_doctor):
+            return JsonResponse({'error': 'Unauthorized. Admin or Doctor access required.'}, status=403)
         return view_func(request, *args, **kwargs)
     return wrapper
 
@@ -425,15 +421,20 @@ def admin_verify_otp(request):
 
 @csrf_exempt
 def admin_check_auth(request):
-    """Check if admin is authenticated (Bypassed)"""
-    return JsonResponse({
-        'authenticated': True,
-        'admin': {
-            'email': request.session.get('admin_email', 'admin@example.com'),
-            'name': request.session.get('admin_name', 'Admin User'),
-            'role': 'admin'
-        }
-    })
+    """Check if admin is authenticated"""
+    is_admin = request.session.get('is_admin', False)
+    
+    if is_admin:
+        return JsonResponse({
+            'authenticated': True,
+            'admin': {
+                'email': request.session.get('admin_email'),
+                'name': request.session.get('admin_name'),
+                'role': 'admin'
+            }
+        })
+    
+    return JsonResponse({'authenticated': False, 'admin': None})
 
 
 @csrf_exempt
@@ -1034,31 +1035,29 @@ def doctor_verify_otp(request):
 
 @csrf_exempt
 def doctor_check_auth(request):
-    """Check if doctor is authenticated (Bypassed)"""
-    doctor = Doctor.objects.select_related('user').filter(is_active=True).first()
-    if doctor:
-        return JsonResponse({
-            'authenticated': True,
-            'doctor': {
-                'id': doctor.id,
-                'email': doctor.user.email,
-                'name': doctor.user.get_full_name(),
-                'specialization': doctor.specialization,
-                'role': 'doctor'
-            }
-        })
+    """Check if doctor is authenticated"""
+    is_doctor = request.session.get('is_doctor', False)
     
-    # Fallback mock if no doctor in DB
-    return JsonResponse({
-        'authenticated': True,
-        'doctor': {
-            'id': 1,
-            'email': 'doctor@example.com',
-            'name': 'Demo Doctor',
-            'specialization': 'Homeopathy',
-            'role': 'doctor'
-        }
-    })
+    if is_doctor:
+        doctor_id = request.session.get('doctor_id')
+        try:
+            doctor = Doctor.objects.select_related('user').get(id=doctor_id, is_active=True)
+            return JsonResponse({
+                'authenticated': True,
+                'doctor': {
+                    'id': doctor.id,
+                    'email': doctor.user.email,
+                    'name': doctor.user.get_full_name(),
+                    'specialization': doctor.specialization,
+                    'role': 'doctor'
+                }
+            })
+        except Doctor.DoesNotExist:
+            # Session exists but doctor not found - clear session
+            request.session.flush()
+            return JsonResponse({'authenticated': False, 'doctor': None})
+    
+    return JsonResponse({'authenticated': False, 'doctor': None})
 
 
 @csrf_exempt
@@ -3655,29 +3654,31 @@ def patient_login(request):
 
 @csrf_exempt
 def patient_check_auth(request):
-    """Check if patient is authenticated (Bypassed)"""
-    patient = Patient.objects.select_related('user').filter(is_active=True).first()
-    if patient:
-        return JsonResponse({
-            'authenticated': True,
-            'patient': {
-                'id': patient.id,
-                'email': patient.user.email,
-                'name': patient.user.get_full_name(),
-                'role': 'patient'
-            }
-        })
+    """Check if patient is authenticated"""
+    if request.method != "GET":
+        return JsonResponse({'error': 'GET method required'}, status=405)
     
-    # Fallback mock if no patient in DB
-    return JsonResponse({
-        'authenticated': True,
-        'patient': {
-            'id': 1,
-            'email': 'patient@example.com',
-            'name': 'Demo Patient',
-            'role': 'patient'
-        }
-    })
+    is_patient = request.session.get('is_patient', False)
+    
+    if is_patient:
+        patient_id = request.session.get('patient_id')
+        try:
+            patient = Patient.objects.select_related('user').get(id=patient_id, is_active=True)
+            return JsonResponse({
+                'authenticated': True,
+                'patient': {
+                    'id': patient.id,
+                    'email': patient.user.email,
+                    'name': patient.user.get_full_name(),
+                    'role': 'patient'
+                }
+            })
+        except Patient.DoesNotExist:
+            # Session exists but patient not found - clear session
+            request.session.flush()
+            return JsonResponse({'authenticated': False, 'patient': None})
+    
+    return JsonResponse({'authenticated': False, 'patient': None})
 
 
 @csrf_exempt
@@ -4090,20 +4091,16 @@ def doctor_change_password(request):
 
 @csrf_exempt
 def get_doctor_dashboard_stats(request):
-    """Get dashboard statistics for doctor (Bypassed)"""
+    """Get dashboard statistics for doctor"""
     if request.method != "GET":
         return JsonResponse({'error': 'GET method required'}, status=405)
     
     doctor_id = request.session.get('doctor_id')
     if not doctor_id:
-        doctor = Doctor.objects.filter(is_active=True).first()
-        if doctor:
-            doctor_id = doctor.id
-        else:
-            doctor_id = 1 # Fallback
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
     
     try:
-        doctor = Doctor.objects.get(id=doctor_id)
+        doctor = Doctor.objects.get(id=doctor_id, is_active=True)
         
         # Get today's date
         today = timezone.now().date()
@@ -7930,16 +7927,12 @@ def doctor_rubric_repertorize(request):
     """
     doctor_id = request.session.get('doctor_id')
     if not doctor_id:
-        doctor = Doctor.objects.filter(is_active=True).first()
-        if doctor:
-            doctor_id = doctor.id
-        else:
-            doctor_id = 1
-    
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
     try:
         doctor = Doctor.objects.get(id=doctor_id)
     except Doctor.DoesNotExist:
-        pass
+        return JsonResponse({'error': 'Invalid session'}, status=401)
 
     try:
         data = json.loads(request.body)

@@ -24,7 +24,7 @@ import { useRouter } from "next/navigation";
 import { LucideIcon } from "lucide-react";
 
 // API Configuration
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 const adminAPI = {
   getDashboardStats: async () => {

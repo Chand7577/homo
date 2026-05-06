@@ -23,7 +23,7 @@ import EditCaseModal from "@/components/EditCaseModal";
 import CaseDetailModal from "@/components/CaseDetailModal";
 import DeleteCaseModal from "@/components/DeleteCaseModal";
 
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 interface Case {
   id: number;

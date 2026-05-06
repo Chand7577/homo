@@ -16,7 +16,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 
-import { API_BASE } from "@/config";
+const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
 
 interface PatientRegistrationModalProps {
   isOpen: boolean;
