@@ -8112,11 +8112,14 @@ def doctor_rubric_repertorize(request):
             'शाम':          ['evening'],
         }
 
+        logger.debug(f"DEBUG REPERTORIZE: all_sub_symptoms={all_sub_symptoms}")
         # Collect all raw tokens from every sub-symptom
         all_tokens = set()
         for sym_part in all_sub_symptoms:
             tokens = sentence_tokens.get(str(sym_part), [])
             all_tokens.update(tokens)
+        
+        logger.debug(f"DEBUG REPERTORIZE: all_tokens={all_tokens}")
 
         # Expand Hindi tokens to their English equivalents
         expanded_tokens = set(all_tokens)
@@ -8152,6 +8155,8 @@ def doctor_rubric_repertorize(request):
             root = HINDI_ROOT_MAP.get(tok)
             if root:
                 expanded_tokens.add(root)
+
+        logger.debug(f"DEBUG REPERTORIZE: expanded_tokens={expanded_tokens}")
 
         # ── Modality keyword detection ────────────────────────────────────────
         # Maps Hindi/English modality phrases to searchable English terms.
@@ -8282,6 +8287,8 @@ def doctor_rubric_repertorize(request):
             for alias in SYMPTOM_ALIAS_MAP.get(tok, []):
                 alias_expanded.add(alias)
         symptom_tokens = alias_expanded
+        logger.debug(f"DEBUG REPERTORIZE: final symptom_tokens={symptom_tokens}")
+        logger.debug(f"DEBUG REPERTORIZE: final modality_tokens={modality_tokens}")
 
         # ═══════════════════════════════════════════════════════════════════════
         # PRIORITY WATERFALL SEARCH
@@ -8358,6 +8365,7 @@ def doctor_rubric_repertorize(request):
                     candidate_ids = tier3_ids
                     match_tier    = 'synonym'
 
+        logger.debug(f"DEBUG REPERTORIZE: match_tier={match_tier}, candidate_ids count={len(candidate_ids)}")
         if not candidate_ids:
             return JsonResponse({'success': True, 'total_matched': 0, 'match_tier': None, 'top_rubrics': [], 'medicine_chart': [], 'symptoms_breakdown': []})
 
