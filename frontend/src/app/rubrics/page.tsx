@@ -30,6 +30,10 @@ const KEYWORD_INDEX: Record<string, string> = {
   "अकेलापन":"Mind", "उदास":"Mind", "हताश":"Mind", "विषाद":"Mind",
   "बेचैनी":"Mind", "भ्रम":"Mind", "याददाश्त":"Mind", "एकाग्रता":"Mind", "ध्यान":"Mind", "पढ़ते":"Mind",
 
+  // ── Emotion (maps to Emotion chapter which is an alias for Mind emotions) ──
+  sadness:"Mind", grief:"Mind", weeping:"Mind", despair:"Mind", melancholy:"Mind",
+  gloom:"Mind", hopeless:"Mind", dejected:"Mind", sorrow:"Mind", despondent:"Mind",
+
   // ── Head ─────────────────────────────────────────────────────────────────
   headache:"Head", head:"Head", migraine:"Head", scalp:"Head",
   forehead:"Head", temple:"Head", occiput:"Head", vertex:"Head",
