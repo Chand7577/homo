@@ -7966,13 +7966,16 @@ def doctor_rubric_repertorize(request):
         'लगता', 'लगती', 'लगते', 'लग', 'रही', 'रहे', 'रहा', 'बहुत', 'ज्यादा', 'कम', 'थोड़ा', 'के', 'लिए', 'भी', 'ही', 'तो', 'तक',
         'जब', 'तब', 'क्यों', 'कैसे', 'क्या', 'हाँ', 'ना', 'नहीं', 'मत', 'दिया', 'दे', 'देता', 'देती', 'देते', 'ले', 'लेता', 'लेती', 'लेते',
         'आ', 'आता', 'आती', 'आते', 'रही', 'ये', 'वो', 'अंदर', 'बाहर', 'ऊपर', 'नीचे', 'पास', 'दूर',
+        # Common Hindi fillers / connectors that add no medical meaning
+        'बिना', 'कारण', 'रहता', 'रहती', 'रहते', 'बिना', 'सिर्फ', 'केवल', 'इसलिए', 'क्योंकि',
         
         # ENGLISH GRAMMAR: Pronouns, Helping Verbs, Prepositions, Fillers
         'is', 'am', 'are', 'i', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'of', 'and', 'my', 'me', 'with', 'for', 'have', 'has', 'had',
         'been', 'was', 'were', 'it', 'that', 'this', 'he', 'she', 'they', 'them', 'his', 'her', 'we', 'us', 'our', 'you', 'your',
         'be', 'do', 'does', 'did', 'doing', 'feel', 'feels', 'feeling', 'getting', 'got', 'very', 'much', 'too', 'up', 'down',
         'out', 'about', 'from', 'by', 'as', 'but', 'or', 'so', 'if', 'then', 'than', 'because', 'who', 'what', 'where', 'when',
-        'why', 'how', 'all', 'any', 'some', 'more', 'most', 'other', 'such', 'only', 'own', 'same', 'there', 'their'
+        'why', 'how', 'all', 'any', 'some', 'more', 'most', 'other', 'such', 'only', 'own', 'same', 'there', 'their',
+        'without', 'reason', 'cause', 'since', 'always', 'never', 'often', 'sometimes'
     }
     
     # Split raw strings into multiple symptoms if they contain conjunctions
@@ -8107,8 +8110,15 @@ def doctor_rubric_repertorize(request):
             'हड्डी':        ['bone'],
             'मांसपेशी':     ['muscle'],
             'अचानक':        ['sudden', 'paroxysmal'],
-            'उदासी':        ['sad', 'sadness', 'depression', 'melancholy'],
-            'दुख':          ['sad', 'grief', 'sorrow', 'distress'],
+            'उदासी':        ['sad', 'sadness', 'depression', 'melancholy', 'gloom', 'gloominess', 'despondency', 'dejection', 'cheerless'],
+            'दुखी':         ['sad', 'sadness', 'grief', 'sorrow', 'melancholy', 'dejected', 'despondent', 'unhappy'],
+            'दुख':          ['sad', 'grief', 'sorrow', 'distress', 'misery'],
+            'निराश':        ['hopeless', 'hopelessness', 'despair', 'despondency', 'discouraged'],
+            'निराशा':       ['hopeless', 'despair', 'despondency', 'hopelessness'],
+            'रोना':         ['weeping', 'crying', 'tears'],
+            'रोता':         ['weeping', 'crying', 'tears'],
+            'रोती':         ['weeping', 'crying', 'tears'],
+            'अकेलापन':      ['loneliness', 'solitude', 'alone', 'forsaken'],
             'एकाग्रता':     ['concentration', 'focus'],
             'पढ़ते':        ['reading', 'studying'],
             'ध्यान':        ['attention', 'focus', 'concentration'],
@@ -8311,17 +8321,21 @@ def doctor_rubric_repertorize(request):
         match_tier   = None   # 'name' | 'modality' | 'synonym'
         candidate_ids = set()
 
-        # ── TIER 1: Rubric name (English + Hindi) ──────────────────────────────
+        # ── TIER 1: Rubric name + description + synonyms (English + Hindi) ──────
         all_search_tokens = set(symptom_tokens) | set(modality_tokens)
         if all_search_tokens:
             name_q = Q()
             for tok in all_search_tokens:
                 name_q |= (
                     Q(name__icontains=tok) |
-                    Q(name_hindi__icontains=tok)
+                    Q(name_hindi__icontains=tok) |
+                    Q(description__icontains=tok) |
+                    Q(description_hindi__icontains=tok) |
+                    Q(synonyms__synonym__icontains=tok) |
+                    Q(synonyms__synonym_hindi__icontains=tok)
                 )
             tier1_ids = set(
-                base_qs.filter(name_q).values_list('id', flat=True)[:300]
+                base_qs.filter(name_q).distinct().values_list('id', flat=True)[:500]
             )
             if tier1_ids:
                 candidate_ids = tier1_ids

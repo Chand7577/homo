@@ -26,6 +26,8 @@ const KEYWORD_INDEX: Record<string, string> = {
   morose:"Mind", sensitive:"Mind", timid:"Mind", suspicious:"Mind",
   "मन":"Mind", "डर":"Mind", "गुस्सा":"Mind", "दुख":"Mind", "चिंता":"Mind",
   "भय":"Mind", "क्रोध":"Mind", "उदासी":"Mind", "निराशा":"Mind",
+  "दुखी":"Mind", "निराश":"Mind", "रोना":"Mind", "रोता":"Mind", "रोती":"Mind",
+  "अकेलापन":"Mind", "उदास":"Mind", "हताश":"Mind", "विषाद":"Mind",
   "बेचैनी":"Mind", "भ्रम":"Mind", "याददाश्त":"Mind", "एकाग्रता":"Mind", "ध्यान":"Mind", "पढ़ते":"Mind",
 
   // ── Head ─────────────────────────────────────────────────────────────────
