@@ -8107,6 +8107,8 @@ def doctor_rubric_repertorize(request):
             'हड्डी':        ['bone'],
             'मांसपेशी':     ['muscle'],
             'अचानक':        ['sudden', 'paroxysmal'],
+            'उदासी':        ['sad', 'sadness', 'depression', 'melancholy'],
+            'दुख':          ['sad', 'grief', 'sorrow', 'distress'],
             'रात':          ['night', 'nocturnal'],
             'सुबह':         ['morning'],
             'शाम':          ['evening'],
@@ -8307,9 +8309,10 @@ def doctor_rubric_repertorize(request):
         candidate_ids = set()
 
         # ── TIER 1: Rubric name (English + Hindi) ──────────────────────────────
-        if symptom_tokens:
+        all_search_tokens = set(symptom_tokens) | set(modality_tokens)
+        if all_search_tokens:
             name_q = Q()
-            for tok in symptom_tokens:
+            for tok in all_search_tokens:
                 name_q |= (
                     Q(name__icontains=tok) |
                     Q(name_hindi__icontains=tok)

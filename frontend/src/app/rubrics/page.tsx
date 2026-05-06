@@ -18,8 +18,8 @@ import { API_BASE } from "@/config";
 // This eliminates probe API calls for the vast majority of symptoms.
 const KEYWORD_INDEX: Record<string, string> = {
   // ── Mind ─────────────────────────────────────────────────────────────────
-  anger:"Mind", anxiety:"Mind", fear:"Mind", grief:"Mind", sad:"Mind",
-  depression:"Mind", irritab:"Mind", mental:"Mind", worry:"Mind",
+  anger:"Mind", anxiety:"Mind", fear:"Mind", grief:"Mind", sad:"Mind", sadness:"Mind", depressed:"Mind", depression:"Mind",
+  irritab:"Mind", mental:"Mind", worry:"Mind",
   confusion:"Mind", memory:"Mind", delusion:"Mind", insanity:"Mind",
   weeping:"Mind", jealous:"Mind", indifference:"Mind", restless:"Mind",
   contradiction:"Mind", forgetful:"Mind", aversion:"Mind", mania:"Mind",
