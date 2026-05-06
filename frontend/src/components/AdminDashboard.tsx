@@ -309,18 +309,29 @@ const AdminDashboard = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl border border-red-200 p-8 max-w-md w-full">
-          <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2 text-center">
-            Error Loading Dashboard
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 max-w-md w-full text-center">
+          <Sparkles className="w-16 h-16 text-indigo-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-black text-gray-900 mb-2">
+            Welcome to Admin Console!
           </h2>
-          <p className="text-gray-600 text-center mb-4">{error}</p>
-          <button
-            onClick={fetchDashboardStats}
-            className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-black transition-all"
-          >
-            Retry
-          </button>
+          <p className="text-gray-500 mb-6 font-medium">
+            The dashboard is initializing. You can try refreshing while the system connects to the backend services.
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={fetchDashboardStats}
+              className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh Dashboard
+            </button>
+            <button
+              onClick={() => (window.location.href = "/")}
+              className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all active:scale-95"
+            >
+              Go to Home
+            </button>
+          </div>
         </div>
       </div>
     );
