@@ -8184,17 +8184,26 @@ def doctor_rubric_repertorize(request):
             'छूने': 'touch',        'छूने से': 'touch',
             # Emotions
             'तनाव': 'stress',       'गुस्से': 'anger',
-            # English modality keywords
-            'worse': 'worse',    'better': 'better',
-            'night': 'night',    'morning': 'morning',
-            'heat': 'heat',      'cold': 'cold',
-            'motion': 'motion',  'rest': 'rest',
-            'pressure': 'pressure', 'touch': 'touch',
-            'eating': 'eating',  'lying': 'lying',
-            'sitting': 'sitting', 'standing': 'standing',
-            'warmth': 'warmth',  'damp': 'damp',
-            'exertion': 'exertion', 'walking': 'walking',
-            'warm': 'warmth',    'wet': 'damp',
+            # English time modalities (was missing these!)
+            'evening':   'evening',   'afternoon': 'afternoon',
+            'night':     'night',     'morning':   'morning',
+            'midnight':  'night',     'noon':      'afternoon',
+            'sunrise':   'morning',   'sunset':    'evening',
+            'daytime':   'day',       'day':       'day',
+            # English temperature / weather
+            'heat':      'heat',      'cold':      'cold',
+            'warm':      'warmth',    'warmth':    'warmth',
+            'damp':      'damp',      'wet':       'damp',
+            'dry':       'dry',       'sun':       'sun',
+            # English condition modalities
+            'worse':     'worse',     'better':    'better',
+            'motion':    'motion',    'rest':      'rest',
+            'pressure':  'pressure',  'touch':     'touch',
+            'eating':    'eating',    'lying':     'lying',
+            'sitting':   'sitting',   'standing':  'standing',
+            'exertion':  'exertion',  'walking':   'walking',
+            'coughing':  'cough',     'bending':   'bending',
+            'rising':    'rising',    'stooping':  'stooping',
         }
 
         # Separate modality tokens from symptom tokens
@@ -8209,6 +8218,72 @@ def doctor_rubric_repertorize(request):
         for tok in all_tokens:
             if tok in MODALITY_KEYWORD_MAP:
                 modality_tokens.add(MODALITY_KEYWORD_MAP[tok])
+
+        # ── Symptom Alias Expansion ───────────────────────────────────────────
+        # Maps common patient words to the actual repertory rubric terms in DB.
+        # In classical homeopathic repertories, rubrics are named "PAIN",
+        # "ERUPTIONS", "DISCHARGE" etc., NOT "headache", "rash", "runny nose".
+        SYMPTOM_ALIAS_MAP = {
+            # Pain aliases
+            'headache':    ['pain', 'ache'],
+            'stomachache': ['pain', 'ache'],
+            'toothache':   ['pain', 'ache'],
+            'backache':    ['pain', 'ache'],
+            'earache':     ['pain', 'ache'],
+            'ache':        ['pain'],
+            'aching':      ['pain'],
+            'painful':     ['pain'],
+            'sore':        ['pain', 'soreness'],
+            'hurt':        ['pain'],
+            'hurting':     ['pain'],
+            # Head symptoms
+            'migraine':    ['pain', 'headache', 'hemicrania'],
+            'dizzy':       ['vertigo', 'dizziness'],
+            'dizziness':   ['vertigo'],
+            # Stomach/GI
+            'stomachache': ['pain', 'gastralgia'],
+            'heartburn':   ['burning', 'pyrosis'],
+            'bloated':     ['distension', 'flatulence', 'bloating'],
+            'bloating':    ['distension', 'flatulence'],
+            'gassy':       ['flatulence', 'gas'],
+            'vomiting':    ['vomit', 'nausea', 'retching'],
+            'nauseous':    ['nausea'],
+            'loose':       ['diarrhea', 'loose stool'],
+            # Eye symptoms
+            'watery':      ['lachrymation', 'discharge', 'watering'],
+            'watering':    ['lachrymation', 'discharge'],
+            'itchy':       ['itching', 'pruritus'],
+            'burning':     ['burning', 'smarting'],
+            # Nose/throat
+            'runny':       ['discharge', 'coryza', 'fluent'],
+            'blocked':     ['obstruction', 'stopped'],
+            'stuffy':      ['obstruction', 'stopped'],
+            'sneezing':    ['sneezing', 'sneezes'],
+            # Respiratory
+            'breathless':  ['dyspnea', 'difficult breathing'],
+            'wheezing':    ['wheezing', 'asthma'],
+            # Skin
+            'itching':     ['itching', 'pruritus'],
+            'rash':        ['eruption', 'rash'],
+            'swollen':     ['swelling', 'edema', 'inflammation'],
+            'swelling':    ['swelling', 'edema'],
+            # General
+            'weak':        ['weakness', 'debility'],
+            'tired':       ['fatigue', 'weakness', 'weariness'],
+            'sleepless':   ['sleeplessness', 'insomnia'],
+            'feverish':    ['fever', 'pyrexia'],
+            'chilly':      ['chilliness', 'chill'],
+            'shivering':   ['chill', 'shivering'],
+            'thirsty':     ['thirst'],
+            'hungry':      ['hunger', 'appetite'],
+        }
+
+        # Expand symptom tokens using alias map
+        alias_expanded = set(symptom_tokens)
+        for tok in list(symptom_tokens):
+            for alias in SYMPTOM_ALIAS_MAP.get(tok, []):
+                alias_expanded.add(alias)
+        symptom_tokens = alias_expanded
 
         # Build candidate query from symptom tokens
         if symptom_tokens:
