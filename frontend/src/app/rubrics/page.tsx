@@ -17,150 +17,49 @@ import { API_BASE } from "@/config";
 // Resolves symptoms to chapters entirely client-side for known terms.
 // This eliminates probe API calls for the vast majority of symptoms.
 const KEYWORD_INDEX: Record<string, string> = {
-  // Mind
-  anger:"Mind",anxiety:"Mind",fear:"Mind",grief:"Mind",sad:"Mind",depression:"Mind",
-  irritab:"Mind",mental:"Mind",worry:"Mind",confusion:"Mind",memory:"Mind",
-  delusion:"Mind",insanity:"Mind",weeping:"Mind",jealous:"Mind",indifference:"Mind",
-  restless:"Mind",contradiction:"Mind",forgetful:"Mind",aversion:"Mind",
-  "मन":"Mind","डर":"Mind","गुस्सा":"Mind","दुख":"Mind","चिंता":"Mind",
-  "भय":"Mind","क्रोध":"Mind","उदासी":"Mind","निराशा":"Mind",
-  // Head
-  headache:"Head",head:"Head",migraine:"Head",scalp:"Head",
-  forehead:"Head",temple:"Head",occiput:"Head",
-  "सिर":"Head","माथा":"Head","सिरदर्द":"Head","आधाशीशी":"Head",
-  // Vertigo (separate chapter in DB)
-  vertigo:"Vertigo",dizz:"Vertigo",
-  "चक्कर":"Vertigo","घबराहट":"Vertigo",
-  // Eyes
-  eye:"Eyes",cornea:"Eyes",conjunctiv:"Eyes",lachrymation:"Eyes",photophobia:"Eyes",
-  "आँख":"Eyes","आंख":"Eyes","आँखों":"Eyes",
-  // Vision (separate chapter in DB)
-  vision:"Vision",sight:"Vision",
-  "नजर":"Vision","दृष्टि":"Vision","दिखना":"Vision","दिखाई":"Vision","धुंधला":"Vision",
-  // Ears
-  ear:"Ears",tinnitus:"Ears",deafness:"Ears",otitis:"Ears","कान":"Ears",
-  // Hearing (separate chapter in DB)
-  hearing:"Hearing",
-  "सुनाई":"Hearing","बहरापन":"Hearing",
-  // Nose
-  nose:"Nose",nasal:"Nose",sneezing:"Nose",rhinitis:"Nose",coryza:"Nose","नाक":"Nose",
-  // Mouth
-  mouth:"Mouth",tongue:"Mouth",lips:"Mouth",saliva:"Mouth",aphthae:"Mouth",
-  "मुँह":"Mouth","जीभ":"Mouth",
-  // Teeth
-  teeth:"Teeth",tooth:"Teeth",gum:"Teeth",dental:"Teeth",caries:"Teeth",
-  "दाँत":"Teeth","मसूड़":"Teeth",
-  // Throat
-  throat:"Throat",tonsil:"Throat",swallow:"Throat",pharynx:"Throat",hoarse:"Throat",
-  "गला":"Throat","गले":"Throat","टॉन्सिल":"Throat",
-  // Face (chapter in DB)
-  face:"Face",
-  "चेहरा":"Face","चेहरे":"Face","गाल":"Face","ठुड़ड़ी":"Face",
-  // Stomach
-  stomach:"Stomach",nausea:"Stomach",vomit:"Stomach",gastric:"Stomach",
-  appetite:"Stomach",hunger:"Stomach",eructation:"Stomach",heartburn:"Stomach",
-  thirst:"Stomach",
-  "भूख":"Stomach","प्यास":"Stomach","मतली":"Stomach","उल्टी":"Stomach",
-  // Abdomen
-  abdomen:"Abdomen",abdominal:"Abdomen",belly:"Abdomen",distension:"Abdomen",
-  flatulence:"Abdomen",bloat:"Abdomen",
-  "पेट":"Abdomen","पेड़ू":"Abdomen","गैस":"Abdomen","फूलना":"Abdomen",
-  // Digestive (chapter in DB)
-  digestive:"Digestive",intestine:"Digestive",bowel:"Digestive",colic:"Digestive",
-  "आँत":"Digestive","पाचन":"Digestive",
-  // Rectum
-  stool:"Rectum",constipat:"Rectum",diarrhea:"Rectum",rectal:"Rectum",
-  hemorrhoid:"Rectum",piles:"Rectum",dysentery:"Rectum",
-  "कब्ज":"Rectum","दस्त":"Rectum","बवासीर":"Rectum","मल":"Rectum",
-  // Urinary
-  urine:"Urinary",urinary:"Urinary",bladder:"Urinary",dysuria:"Urinary",
-  "पेशाब":"Urinary","मूत्र":"Urinary",
-  // Kidney (separate chapter in DB)
-  kidney:"Kidney",
-  "वृक्क":"Kidney","गुर्दा":"Kidney","गुर्दे":"Kidney",
-  // Chest
-  chest:"Chest",lung:"Chest",breast:"Chest",
-  "छाती":"Chest","फेफड़ा":"Chest","फेफड़े":"Chest",
-  // Heart (separate chapter in DB)
-  heart:"Heart",palpitat:"Heart",cardiac:"Heart",
-  "हृदय":"Heart","दिल":"Heart","धड़कन":"Heart",
-  // Circulatory (chapter in DB)
-  circulatory:"Circulatory","रक्तसंचार":"Circulatory",
-  // Respiratory
-  breath:"Respiratory",breathe:"Respiratory",asthma:"Respiratory",
-  wheez:"Respiratory",dyspnea:"Respiratory",
-  "साँस":"Respiratory","दमा":"Respiratory",
-  // Cough
-  cough:"Cough","खाँसी":"Cough","खांसी":"Cough",
-  // Back
-  back:"Back",spine:"Back",sciatica:"Back",
-  "पीठ":"Back",
-  // Lumbosacral (chapter in DB)
-  lumbar:"Lumbosacral",sacrum:"Lumbosacral",lumbosacral:"Lumbosacral",
-  "कमर":"Lumbosacral","कमरदर्द":"Lumbosacral",
-  // Cervical (chapter in DB)
-  cervical:"Cervical",
-  "गर्दन":"Cervical","सर्वाइकल":"Cervical",
-  // Extremities
-  leg:"Extremities",arm:"Extremities",joint:"Extremities",knee:"Extremities",
-  ankle:"Extremities",hand:"Extremities",foot:"Extremities",feet:"Extremities",
-  elbow:"Extremities",shoulder:"Extremities",wrist:"Extremities",hip:"Extremities",
-  rheumatism:"Extremities",arthritis:"Extremities",
-  "हाथ":"Extremities","पैर":"Extremities",
-  "जोड़":"Extremities","जोड़ों":"Extremities","ऐंठन":"Extremities",
-  // Locomotor (chapter in DB)
-  locomotor:"Locomotor",bone:"Locomotor",
-  "हड्डी":"Locomotor","हड्डियाँ":"Locomotor","चरचराहट":"Locomotor",
-  // Musculo (chapter in DB)
-  muscle:"Musculo",muscular:"Musculo",
-  "मांसपेशी":"Musculo","मांसपेशियाँ":"Musculo",
-  // Nervous (chapter: Nervous, id=8583)
-  nerve:"Nervous",neural:"Nervous",neuralgia:"Nervous",neuralgic:"Nervous",
-  paralysis:"Nervous",convulsion:"Nervous",epilepsy:"Nervous",
-  trembling:"Nervous",numbness:"Nervous",tingling:"Nervous",
-  "नस":"Nervous","नसों":"Nervous","नसें":"Nervous",
-  "तंत्रिका":"Nervous","तंत्रिकाओं":"Nervous",
-  "सुन्न":"Nervous","झनझनाहट":"Nervous",
-  "लकवा":"Nervous","मिर्गी":"Nervous","कंपन":"Nervous","बेहोशी":"Nervous",
-  // Endocrine (chapter in DB)
-  thyroid:"Endocrine",diabetes:"Endocrine",hormonal:"Endocrine",
-  "थायराइड":"Endocrine","मधुमेह":"Endocrine","शुगर":"Endocrine","हार्मोन":"Endocrine",
-  // Skin
-  skin:"Skin",rash:"Skin",eruption:"Skin",itch:"Skin",eczema:"Skin",
-  urticaria:"Skin",psoriasis:"Skin",acne:"Skin",hive:"Skin",
-  "त्वचा":"Skin","खुजली":"Skin","दाद":"Skin","चर्मरोग":"Skin","दाने":"Skin","फुंसी":"Skin",
-  // Hairs
-  hair:"Hairs",dandruff:"Hairs",alopecia:"Hairs",
-  "बाल":"Hairs","बालों":"Hairs","रूसी":"Hairs",
-  // Fever
-  fever:"Fever",chill:"Fever",ague:"Fever",
-  "बुखार":"Fever","ठंड":"Fever","ताप":"Fever",
-  // Sleep
-  sleep:"Sleep",insomnia:"Sleep",somnambulism:"Sleep",
-  "नींद":"Sleep","अनिद्रा":"Sleep",
-  // Blood
-  bleed:"Blood",bleeding:"Blood",blood:"Blood",hemorrhage:"Blood",
-  "खून":"Blood","रक्त":"Blood",
-  // Female-R (menstrual)
-  menses:"Female-R",menstrual:"Female-R",menstruation:"Female-R",leucorrhoea:"Female-R",
-  "माहवारी":"Female-R","मासिक":"Female-R","प्रदर":"Female-R","सफेद":"Female-R",
-  // Female-G
-  uterus:"Female-G",ovary:"Female-G",
-  "गर्भाशय":"Female-G","गर्भ":"Female-G","अंडाशय":"Female-G",
-  // Male-R
-  seminal:"Male-R","वीर्य":"Male-R","शुक्र":"Male-R",
-  // Generalities
-  weakness:"Generalities",fatigue:"Generalities",weight:"Generalities",
-  perspiration:"Generalities",sweat:"Generalities",exhaustion:"Generalities",debility:"Generalities",
-  "कमज़ोरी":"Generalities","पसीना":"Generalities",
-  "थकान":"Generalities","थकावट":"Generalities","कमजोरी":"Generalities",
+  // ── Mind ─────────────────────────────────────────────────────────────────
+  anger:"Mind", anxiety:"Mind", fear:"Mind", grief:"Mind", sad:"Mind",
+  depression:"Mind", irritab:"Mind", mental:"Mind", worry:"Mind",
+  confusion:"Mind", memory:"Mind", delusion:"Mind", insanity:"Mind",
+  weeping:"Mind", jealous:"Mind", indifference:"Mind", restless:"Mind",
+  contradiction:"Mind", forgetful:"Mind", aversion:"Mind", mania:"Mind",
+  morose:"Mind", sensitive:"Mind", timid:"Mind", suspicious:"Mind",
+  "मन":"Mind", "डर":"Mind", "गुस्सा":"Mind", "दुख":"Mind", "चिंता":"Mind",
+  "भय":"Mind", "क्रोध":"Mind", "उदासी":"Mind", "निराशा":"Mind",
+  "बेचैनी":"Mind", "भ्रम":"Mind", "याददाश्त":"Mind",
+
+  // ── Head ─────────────────────────────────────────────────────────────────
+  headache:"Head", head:"Head", migraine:"Head", scalp:"Head",
+  forehead:"Head", temple:"Head", occiput:"Head", vertex:"Head",
+  "सिर":"Head", "माथा":"Head", "सिरदर्द":"Head", "आधाशीशी":"Head",
+  "शिर":"Head", "सिर में":"Head",
+
+  // ── Eyes ─────────────────────────────────────────────────────────────────
+  eye:"Eyes", eyes:"Eyes", cornea:"Eyes", conjunctiv:"Eyes",
+  lachrymation:"Eyes", photophobia:"Eyes", lids:"Eyes", lid:"Eyes",
+  eyelid:"Eyes", pupil:"Eyes", retina:"Eyes", optic:"Eyes",
+  "आँख":"Eyes", "आंख":"Eyes", "आँखों":"Eyes", "आंखों":"Eyes",
+  "पलक":"Eyes", "आँसू":"Eyes",
+
+  // ── Ears ─────────────────────────────────────────────────────────────────
+  ear:"Ears", ears:"Ears", tinnitus:"Ears", deafness:"Ears",
+  otitis:"Ears", discharge:"Ears", cerumen:"Ears", wax:"Ears",
+  "कान":"Ears", "कानों":"Ears", "कान में":"Ears",
+
+  // ── Nose ─────────────────────────────────────────────────────────────────
+  nose:"Nose", nasal:"Nose", sneezing:"Nose", rhinitis:"Nose",
+  coryza:"Nose", nostril:"Nose", discharge:"Nose", bleeding:"Nose",
+  polyp:"Nose",
+  "नाक":"Nose", "नाक से":"Nose", "छींक":"Nose", "जुकाम":"Nose",
 } as Record<string, string>;
 
 // Exact phrase index to override single-word tokens
 const PHRASE_INDEX: Record<string, string> = {
-  "सिर पर दाने": "Hairs",
-  "बालों में": "Hairs",
-  "बालों का": "Hairs",
+  "सिर में दर्द": "Head",
+  "सिर दर्द":    "Head",
+  "आँख में":     "Eyes",
+  "कान में":     "Ears",
+  "नाक से":      "Nose",
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
