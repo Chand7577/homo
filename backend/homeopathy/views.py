@@ -7938,6 +7938,8 @@ def doctor_rubric_repertorize(request):
     
     try:
         doctor = Doctor.objects.get(id=doctor_id)
+    except Doctor.DoesNotExist:
+        pass
 
     try:
         data = json.loads(request.body)
