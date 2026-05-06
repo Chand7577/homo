@@ -18,7 +18,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 
 interface PatientSignupModalProps {
   isOpen: boolean;

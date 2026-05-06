@@ -14,7 +14,7 @@ import {
   Inbox,
 } from "lucide-react";
 
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 
 /**
  * MAIN MENU CONFIG
@@ -85,7 +85,7 @@ const Sidebar = () => {
 
     try {
       // 2️⃣ Call backend logout endpoint
-      await fetch("https://homo-backend-sumy.onrender.com/homeopathy/doctor/logout/", {
+      await fetch(`${API_BASE}/doctor/logout/`, {
         method: "POST",
         credentials: "include",
       });

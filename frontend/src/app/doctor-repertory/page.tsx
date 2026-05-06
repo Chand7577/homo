@@ -26,7 +26,7 @@ import {
 import RubricModal from "@/components/RubricModal";
 import MedicineModal from "@/components/MedicineModal";
 
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 const PAGE_SIZE = 50;
 
 // ── Search Helper (In-Memory Inverted Index) ──────────────────────────

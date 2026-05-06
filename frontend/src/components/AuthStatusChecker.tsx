@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://10.211.126.199:8000";
+import { API_BASE } from "@/config";
 
 interface User {
   id: number;

@@ -26,7 +26,7 @@ import {
   Loader2,
 } from "lucide-react";
 
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 
 interface Rubric {
   id: number;
