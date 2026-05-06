@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { X, Pill, AlertCircle, CheckCircle, Plus, Trash2 } from "lucide-react";
 
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 
 interface MedicineModalProps {
   isOpen: boolean;

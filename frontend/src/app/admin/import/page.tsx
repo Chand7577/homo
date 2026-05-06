@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 
 import { 
   Upload,

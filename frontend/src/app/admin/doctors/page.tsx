@@ -24,7 +24,7 @@ import DoctorRegistrationModal from "@/components/DoctorRegistrationModal";
 import DoctorDetailModal from "@/components/DoctorDetailModal";
 import DoctorEditModal from "@/components/DoctorEditModal";
 
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 
 interface Doctor {
   id: number;

@@ -4,7 +4,7 @@ import React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Home, Search, Clock, User, LogOut, BookOpen, Mail, Stethoscope } from "lucide-react";
 
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 
 const menuItems = [
   { label: "Home", path: "/patient/home", icon: Home },

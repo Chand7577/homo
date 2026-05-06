@@ -28,7 +28,7 @@ import {
 import RubricModal from "@/components/RubricModal";
 import MedicineModal from "@/components/MedicineModal";
 
-const API_BASE = "https://homo-backend-sumy.onrender.com/homeopathy";
+import { API_BASE } from "@/config";
 
 interface Rubric {
   id: number;
