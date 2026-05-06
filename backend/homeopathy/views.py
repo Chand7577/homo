@@ -8460,6 +8460,8 @@ def doctor_rubric_repertorize(request):
                         'full_path':      item['rubric']['full_path'],
                         'score':          item['score'],
                         'medicine_count': item['rubric']['medicine_count'],
+                        'modalities':     item['rubric']['modalities'],
+                        'synonyms':       item['rubric']['synonyms'],
                         'medicines':      item['medicines'][:5],   # top 5 per rubric
                     })
             # Sort rubrics for this symptom by score
