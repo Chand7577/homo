@@ -7967,7 +7967,7 @@ def doctor_rubric_repertorize(request):
         'जब', 'तब', 'क्यों', 'कैसे', 'क्या', 'हाँ', 'ना', 'नहीं', 'मत', 'दिया', 'दे', 'देता', 'देती', 'देते', 'ले', 'लेता', 'लेती', 'लेते',
         'आ', 'आता', 'आती', 'आते', 'रही', 'ये', 'वो', 'अंदर', 'बाहर', 'ऊपर', 'नीचे', 'पास', 'दूर',
         # Common Hindi fillers / connectors that add no medical meaning
-        'बिना', 'कारण', 'रहता', 'रहती', 'रहते', 'बिना', 'सिर्फ', 'केवल', 'इसलिए', 'क्योंकि',
+        'रहता', 'रहती', 'रहते', 'सिर्फ', 'केवल', 'इसलिए', 'क्योंकि',
         
         # ENGLISH GRAMMAR: Pronouns, Helping Verbs, Prepositions, Fillers
         'is', 'am', 'are', 'i', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'of', 'and', 'my', 'me', 'with', 'for', 'have', 'has', 'had',
@@ -8111,7 +8111,7 @@ def doctor_rubric_repertorize(request):
             'मांसपेशी':     ['muscle'],
             'अचानक':        ['sudden', 'paroxysmal'],
             'उदासी':        ['sad', 'sadness', 'depression', 'melancholy', 'gloom', 'gloominess', 'despondency', 'dejection', 'cheerless'],
-            'दुखी':         ['sad', 'sadness', 'grief', 'sorrow', 'melancholy', 'dejected', 'despondent', 'unhappy'],
+            'दुखी':         ['sad', 'sadness', 'sorrow', 'melancholy', 'dejected', 'despondent', 'unhappy'],
             'दुख':          ['sad', 'grief', 'sorrow', 'distress', 'misery'],
             'निराश':        ['hopeless', 'hopelessness', 'despair', 'despondency', 'discouraged'],
             'निराशा':       ['hopeless', 'despair', 'despondency', 'hopelessness'],
