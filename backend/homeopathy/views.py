@@ -8515,7 +8515,7 @@ def doctor_rubric_repertorize(request):
                     'rubric_count': 1,
                     'rubrics': [best_rubric_data],
                     'score': best_score,
-                    'exact_match': 'exact_match' in best_rubric_data['matched_fields']
+                    'exact_match': 'exact_match' in best_rubric_data['rubric']['matched_fields']
                 })
                 # Add to all_selected_rubrics_dict
                 r_id = best_rubric_data['rubric']['id']
