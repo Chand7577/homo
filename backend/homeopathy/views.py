@@ -7966,6 +7966,7 @@ def doctor_rubric_repertorize(request):
         'लगता', 'लगती', 'लगते', 'लग', 'रही', 'रहे', 'रहा', 'बहुत', 'ज्यादा', 'कम', 'थोड़ा', 'के', 'लिए', 'भी', 'ही', 'तो', 'तक',
         'जब', 'तब', 'क्यों', 'कैसे', 'क्या', 'हाँ', 'ना', 'नहीं', 'मत', 'दिया', 'दे', 'देता', 'देती', 'देते', 'ले', 'लेता', 'लेती', 'लेते',
         'आ', 'आता', 'आती', 'आते', 'रही', 'ये', 'वो', 'अंदर', 'बाहर', 'ऊपर', 'नीचे', 'पास', 'दूर',
+        'जैसा', 'जैसे', 'जैसी', 'ऐसा', 'ऐसे', 'ऐसी',
         # Common Hindi fillers / connectors that add no medical meaning
         'रहता', 'रहती', 'रहते', 'सिर्फ', 'केवल', 'इसलिए', 'क्योंकि',
         
@@ -8125,6 +8126,10 @@ def doctor_rubric_repertorize(request):
             'रात':          ['night', 'nocturnal'],
             'सुबह':         ['morning'],
             'शाम':          ['evening'],
+            'गाँठ':         ['lump', 'nodule', 'knot'],
+            'गांठ':         ['lump', 'nodule', 'knot'],
+            'एहसास':        ['sensation', 'feeling'],
+            'महसूस':        ['sensation', 'feeling'],
         }
 
         logger.debug(f"DEBUG REPERTORIZE: all_sub_symptoms={all_sub_symptoms}")
@@ -8306,236 +8311,227 @@ def doctor_rubric_repertorize(request):
         logger.debug(f"DEBUG REPERTORIZE: final modality_tokens={modality_tokens}")
 
         # ═══════════════════════════════════════════════════════════════════════
-        # PRIORITY WATERFALL SEARCH
+        # PER-SYMPTOM SCORING ENGINE
         # ─────────────────────────────────────────────────────────────────────
-        # Tier 1 → Rubric name  (name EN + name_hindi)
-        # Tier 2 → Modalities   (if Tier 1 returned nothing)
-        # Tier 3 → Synonyms     (if Tier 2 returned nothing)
-        #
-        # Each tier is tried in order. As soon as any tier finds at least one
-        # candidate, search stops and those candidates are used exclusively.
-        # The winning tier is stored in `match_tier` so scoring can weight
-        # results appropriately and the frontend can label the source.
+        # For each symptom, we find the best matching rubric based on score:
+        # rubric match english/hindi : 50 points
+        # modalities                 : 30 points
+        # synonyms                   : 20 points
+        # specific entire match      : +10 points
         # ═══════════════════════════════════════════════════════════════════════
 
-        match_tier   = None   # 'name' | 'modality' | 'synonym'
-        candidate_ids = set()
+        symptoms_breakdown = []
+        all_selected_rubrics_dict = {}  # rubric_id -> best_rubric_data
 
-        # ── TIER 1: Rubric name + description + synonyms (English + Hindi) ──────
-        all_search_tokens = set(symptom_tokens) | set(modality_tokens)
-        if all_search_tokens:
-            name_q = Q()
+        for raw_symptom in all_sub_symptoms:
+            sym_str = str(raw_symptom).strip()
+            if not sym_str:
+                continue
+
+            # Tokens for this specific symptom
+            tokens = sentence_tokens.get(sym_str, [])
+            if not tokens:
+                continue
+
+            # Expand tokens for this symptom
+            expanded_tokens = set(tokens)
+            for tok in tokens:
+                for en_tok in HINDI_EN_MAP.get(tok, []):
+                    expanded_tokens.add(en_tok)
+                root = HINDI_ROOT_MAP.get(tok)
+                if root:
+                    expanded_tokens.add(root)
+
+            # Separate modality tokens
+            sym_modality_tokens = set()
+            sym_symptom_tokens = set(expanded_tokens)
+            for tok in list(expanded_tokens):
+                if tok in MODALITY_KEYWORD_MAP:
+                    sym_modality_tokens.add(MODALITY_KEYWORD_MAP[tok])
+                    sym_symptom_tokens.discard(tok)
+            for tok in tokens:
+                if tok in MODALITY_KEYWORD_MAP:
+                    sym_modality_tokens.add(MODALITY_KEYWORD_MAP[tok])
+
+            # Alias expansion
+            alias_expanded = set(sym_symptom_tokens)
+            for tok in list(sym_symptom_tokens):
+                for alias in SYMPTOM_ALIAS_MAP.get(tok, []):
+                    alias_expanded.add(alias)
+            sym_symptom_tokens = alias_expanded
+
+            all_search_tokens = sym_symptom_tokens | sym_modality_tokens
+
+            if not all_search_tokens:
+                continue
+
+            # Build query to find candidate rubrics for this symptom
+            q = Q()
             for tok in all_search_tokens:
-                name_q |= (
+                q |= (
                     Q(name__icontains=tok) |
                     Q(name_hindi__icontains=tok) |
                     Q(description__icontains=tok) |
                     Q(description_hindi__icontains=tok) |
                     Q(synonyms__synonym__icontains=tok) |
-                    Q(synonyms__synonym_hindi__icontains=tok)
+                    Q(synonyms__synonym_hindi__icontains=tok) |
+                    Q(modalities__name__icontains=tok) |
+                    Q(modalities__name_hindi__icontains=tok)
                 )
-            tier1_ids = set(
-                base_qs.filter(name_q).distinct().values_list('id', flat=True)[:500]
-            )
-            if tier1_ids:
-                candidate_ids = tier1_ids
-                match_tier    = 'name'
 
-        # ── TIER 2: Modalities (only if Tier 1 empty) ──────────────────────────
-        if not candidate_ids:
-            # Build the full set of modality search terms:
-            # – tokens explicitly in MODALITY_KEYWORD_MAP
-            # – + the raw symptom_tokens themselves (user may have typed
-            #   a modality word like "evening", "cold", "pressure" directly)
-            all_mod_search = set(modality_tokens)  # already mapped English terms
-            for tok in symptom_tokens:
-                if tok in MODALITY_KEYWORD_MAP:
-                    all_mod_search.add(MODALITY_KEYWORD_MAP[tok])
-                else:
-                    all_mod_search.add(tok)  # try raw token against modality fields too
+            # Fetch candidates
+            candidate_ids = set(base_qs.filter(q).values_list('id', flat=True)[:500])
+            if not candidate_ids:
+                symptoms_breakdown.append({
+                    'symptom': sym_str,
+                    'rubric_count': 0,
+                    'rubrics': []
+                })
+                continue
 
-            if all_mod_search:
-                mod_q = Q()
-                for mtok in all_mod_search:
-                    mod_q |= (
-                        Q(modalities__name__icontains=mtok) |
-                        Q(modalities__name_hindi__icontains=mtok)
-                    )
-                tier2_ids = set(
-                    base_qs.filter(mod_q).values_list('id', flat=True)[:300]
-                )
-                if tier2_ids:
-                    candidate_ids = tier2_ids
-                    match_tier    = 'modality'
+            candidates = base_qs.filter(id__in=candidate_ids).distinct()
 
-        # ── TIER 3: Synonyms (only if Tier 1 & 2 both empty) ───────────────────
-        if not candidate_ids:
-            syn_search = set(symptom_tokens) | set(modality_tokens)
-            if syn_search:
-                syn_q = Q()
-                for tok in syn_search:
-                    syn_q |= (
-                        Q(synonyms__synonym__icontains=tok) |
-                        Q(synonyms__synonym_hindi__icontains=tok)
-                    )
-                tier3_ids = set(
-                    base_qs.filter(syn_q).values_list('id', flat=True)[:300]
-                )
-                if tier3_ids:
-                    candidate_ids = tier3_ids
-                    match_tier    = 'synonym'
+            best_rubric_data = None
+            best_score = -9999
 
-        logger.debug(f"DEBUG REPERTORIZE: match_tier={match_tier}, candidate_ids count={len(candidate_ids)}")
-        if not candidate_ids:
-            return JsonResponse({'success': True, 'total_matched': 0, 'match_tier': None, 'top_rubrics': [], 'medicine_chart': [], 'symptoms_breakdown': []})
+            # Normalize symptom string for exact match checks
+            sym_normalized = " ".join(tokens)
 
-        # Fetch full objects for the candidates.
-        matched_rubrics = base_qs.filter(id__in=candidate_ids).distinct()
+            for rubric in candidates:
+                score = 0
+                matched_fields = []
+                
+                rubric_name_lower = rubric.name.lower()
+                rubric_hindi_lower = (rubric.name_hindi or '').lower()
+                
+                synonym_texts = [s.synonym.lower() for s in rubric.synonyms.all()]
+                synonym_hindi_texts = [(s.synonym_hindi or '').lower() for s in rubric.synonyms.all()]
+                
+                modality_texts = [m.name.lower() for m in rubric.modalities.all()]
+                modality_hindi_texts = [(m.name_hindi or '').lower() for m in rubric.modalities.all()]
 
-        # ── Step 3: Score each matched rubric ─────────────────────────────────
-        # Scoring is tier-aware: we award points ONLY for the fields that are
-        # relevant to the winning search tier. This prevents a synonym-tier
-        # result from appearing to score on rubric-name fields it didn't match.
-        #
-        #  Tier 'name'     → score on: name (EN+HI) + description
-        #  Tier 'modality' → score on: modality fields
-        #  Tier 'synonym'  → score on: synonym fields (EN+HI)
-        #
-        # En/Hindi equivalents are always checked regardless of tier so Hindi
-        # input can still match English rubric names and vice-versa.
-        WEIGHTS = {
-            'name':        10,
-            'description':  5,
-            'synonym':      8,
-            'modality':     9,
-            'hindi':        8,
-        }
+                # 1. Exact match check (+10)
+                rubric_name_clean = " ".join([w.lower() for w in re.sub(r'[^\w\s\u0900-\u097F]', ' ', rubric_name_lower).split() if w not in stop_words])
+                rubric_hindi_clean = " ".join([w.lower() for w in re.sub(r'[^\w\s\u0900-\u097F]', ' ', rubric_hindi_lower).split() if w not in stop_words])
 
-        scored = []
-        for rubric in matched_rubrics:
-            score = 0
-            matched_symptoms = []
-            matched_field    = match_tier   # which field type produced this hit
+                exact_match = False
+                if sym_normalized and (sym_normalized == rubric_name_clean or sym_normalized == rubric_hindi_clean):
+                    exact_match = True
+                elif sym_str.lower() == rubric_name_lower or sym_str.lower() == rubric_hindi_lower:
+                    exact_match = True
+                
+                if exact_match:
+                    score += 10
+                    matched_fields.append('exact_match')
+                elif sym_str.lower() in rubric_name_lower or sym_str.lower() in rubric_hindi_lower:
+                    score += 5 # Substring match bonus
+                    matched_fields.append('substring_match')
 
-            rubric_name_lower    = rubric.name.lower()
-            rubric_desc_lower    = rubric.description.lower()
-            rubric_hindi_lower   = (rubric.name_hindi or '').lower()
-            desc_hindi_lower     = (rubric.description_hindi or '').lower()
+                # 2. Token matching
+                has_name_match = False
+                has_modality_match = False
+                has_synonym_match = False
 
-            synonym_texts        = [s.synonym.lower() for s in rubric.synonyms.all()]
-            synonym_hindi_texts  = [(s.synonym_hindi or '').lower() for s in rubric.synonyms.all()]
+                for term in all_search_tokens:
+                    term_lower = term.lower()
+                    en_equivalents = HINDI_EN_MAP.get(term_lower, [])
+                    terms_to_check = [term_lower] + en_equivalents
 
-            modality_texts       = [m.name.lower() for m in rubric.modalities.all()]
-            modality_hindi_texts = [(m.name_hindi or '').lower() for m in rubric.modalities.all()]
+                    # Name match
+                    for t in terms_to_check:
+                        if t in rubric_name_lower or t in rubric_hindi_lower or t in rubric.description.lower() or t in (rubric.description_hindi or '').lower():
+                            has_name_match = True
+                            break
 
-            for term in list(symptom_tokens) + list(modality_tokens):
-                term_lower    = term.lower()
-                en_equivalents = HINDI_EN_MAP.get(term_lower, [])
-                term_matched  = False
+                    # Modality match
+                    for t in terms_to_check:
+                        if any(t in m for m in modality_texts) or any(t in m for m in modality_hindi_texts):
+                            has_modality_match = True
+                            break
 
-                # ── Score according to the winning tier ─────────────────────
-                if match_tier == 'name':
-                    # Primary: rubric name EN/HI
-                    if term_lower in rubric_name_lower:
-                        score += WEIGHTS['name']; term_matched = True
-                    if term_lower in rubric_hindi_lower:
-                        score += WEIGHTS['hindi']; term_matched = True
-                    # Secondary: description
-                    if term_lower in rubric_desc_lower:
-                        score += WEIGHTS['description']; term_matched = True
-                    if term_lower in desc_hindi_lower:
-                        score += WEIGHTS['description']; term_matched = True
-                    # English equivalents of Hindi tokens
-                    for en_tok in en_equivalents:
-                        if en_tok in rubric_name_lower:
-                            score += WEIGHTS['name']; term_matched = True
-                        if en_tok in rubric_desc_lower:
-                            score += WEIGHTS['description']; term_matched = True
+                    # Synonym match
+                    for t in terms_to_check:
+                        if any(t in s for s in synonym_texts) or any(t in s for s in synonym_hindi_texts):
+                            has_synonym_match = True
+                            break
 
-                elif match_tier == 'modality':
-                    for mod in modality_texts:
-                        if term_lower in mod:
-                            score += WEIGHTS['modality']; term_matched = True; break
-                    for mod_hi in modality_hindi_texts:
-                        if term_lower in mod_hi:
-                            score += WEIGHTS['modality']; term_matched = True; break
-                    # English equivalents
-                    for en_tok in en_equivalents:
-                        for mod in modality_texts:
-                            if en_tok in mod:
-                                score += WEIGHTS['modality']; term_matched = True; break
-                        if term_matched: break
+                # Apply main scores based on the new logic
+                if has_name_match:
+                    score += 50
+                    matched_fields.append('name')
+                elif has_modality_match:
+                    score += 30
+                    matched_fields.append('modality')
+                elif has_synonym_match:
+                    score += 20
+                    matched_fields.append('synonym')
+                
+                # If no primary fields matched but we somehow got here, ignore
+                if not matched_fields:
+                    continue
 
-                elif match_tier == 'synonym':
-                    for syn in synonym_texts:
-                        if term_lower in syn:
-                            score += WEIGHTS['synonym']; term_matched = True; break
-                    for syn_hi in synonym_hindi_texts:
-                        if term_lower in syn_hi:
-                            score += WEIGHTS['synonym']; term_matched = True; break
-                    # English equivalents
-                    for en_tok in en_equivalents:
-                        for syn in synonym_texts:
-                            if en_tok in syn:
-                                score += WEIGHTS['synonym']; term_matched = True; break
-                        if term_matched: break
+                # Tie-breakers: penalize long rubric names, reward more medicines
+                score -= len(rubric.name) * 0.001
+                score += rubric.medicine_grades.count() * 0.0001
 
-                if term_matched and term_lower not in matched_symptoms:
-                    matched_symptoms.append(term_lower)
+                if score > best_score:
+                    best_score = score
+                    # Collect medicines
+                    medicines = []
+                    for mg in rubric.medicine_grades.all():
+                        medicines.append({
+                            'id': mg.medicine.id,
+                            'name': mg.medicine.name,
+                            'latin_name': mg.medicine.latin_name,
+                            'grade': mg.grade,
+                            'grade_label': mg.get_grade_display(),
+                        })
 
-            if score > 0:
-                # Gather medicines for this rubric
-                medicines = []
-                for mg in rubric.medicine_grades.all():
-                    medicines.append({
-                        'id':          mg.medicine.id,
-                        'name':        mg.medicine.name,
-                        'latin_name':  mg.medicine.latin_name,
-                        'grade':       mg.grade,
-                        'grade_label': mg.get_grade_display(),
-                    })
-
-                scored.append({
-                    'rubric': {
-                        'id':               rubric.id,
-                        'name':             rubric.name,
-                        'name_hindi':       rubric.name_hindi,
-                        'description':      rubric.description,
-                        'level':            rubric.level,
-                        'full_path':        rubric.get_full_path(),
-                        'parent_name':      rubric.parent.name if rubric.parent else None,
-                        'medicine_count':   len(medicines),
-                        'match_tier':       match_tier,   # 'name' | 'modality' | 'synonym'
-                        'modalities': {
-                            'aggravations': [
-                                {'name': m.name, 'name_hindi': m.name_hindi}
-                                for m in rubric.modalities.filter(modality_type='aggravation')
-                            ],
-                            'ameliorations': [
-                                {'name': m.name, 'name_hindi': m.name_hindi}
-                                for m in rubric.modalities.filter(modality_type='amelioration')
-                            ],
+                    best_rubric_data = {
+                        'rubric': {
+                            'id': rubric.id,
+                            'name': rubric.name,
+                            'name_hindi': rubric.name_hindi,
+                            'description': rubric.description,
+                            'level': rubric.level,
+                            'full_path': rubric.get_full_path(),
+                            'parent_name': rubric.parent.name if rubric.parent else None,
+                            'medicine_count': len(medicines),
+                            'matched_fields': matched_fields,
+                            'modalities': {
+                                'aggravations': [{'name': m.name, 'name_hindi': m.name_hindi} for m in rubric.modalities.filter(modality_type='aggravation')],
+                                'ameliorations': [{'name': m.name, 'name_hindi': m.name_hindi} for m in rubric.modalities.filter(modality_type='amelioration')],
+                            },
+                            'synonyms': [{'synonym': s.synonym, 'synonym_hindi': s.synonym_hindi} for s in rubric.synonyms.all()],
                         },
-                        'synonyms': [
-                            {'synonym': s.synonym, 'synonym_hindi': s.synonym_hindi}
-                            for s in rubric.synonyms.all()
-                        ],
-                    },
-                    'score':             score,
-                    'matched_symptoms':  matched_symptoms,
-                    'matched_field':     match_tier,   # echoed at result level too
-                    'medicines':         medicines,
+                        'score': score,
+                        'matched_symptoms': list(all_search_tokens),
+                        'medicines': medicines,
+                    }
+
+            if best_rubric_data and best_score > 0:
+                symptoms_breakdown.append({
+                    'symptom': sym_str,
+                    'rubric_count': 1,
+                    'rubrics': [best_rubric_data],
+                    'score': best_score
+                })
+                # Add to all_selected_rubrics_dict
+                r_id = best_rubric_data['rubric']['id']
+                # If the same rubric is matched by multiple symptoms, keep the one with the highest score
+                if r_id not in all_selected_rubrics_dict or best_score > all_selected_rubrics_dict[r_id]['score']:
+                    all_selected_rubrics_dict[r_id] = best_rubric_data
+            else:
+                symptoms_breakdown.append({
+                    'symptom': sym_str,
+                    'rubric_count': 0,
+                    'rubrics': []
                 })
 
-        # Sort by score descending
-        scored.sort(key=lambda x: x['score'], reverse=True)
-        top_rubrics = scored[:top_n]
+        # Step 4: Aggregate medicines across top rubrics
+        top_rubrics = list(all_selected_rubrics_dict.values())
+        top_rubrics.sort(key=lambda x: x['score'], reverse=True)
 
-        # ── Step 4: Aggregate medicines across top rubrics ────────────────────
-        # For each medicine that appears in the top rubrics:
-        #   occurrence_count = how many rubrics it appears in
-        #   total_grade      = sum of grades across all those rubrics
-        #   avg_grade        = mean grade
         medicine_agg = {}   # medicine_id → dict
 
         for item in top_rubrics:
@@ -8554,7 +8550,7 @@ def doctor_rubric_repertorize(request):
                 medicine_agg[mid]['total_grade']  += med['grade']
                 medicine_agg[mid]['rubric_names'].append(item['rubric']['name'])
 
-        # Compute avg_grade and sort: first by occurrences desc, then by total_grade desc
+        # Compute avg_grade and sort
         medicine_chart = []
         for mid, agg in medicine_agg.items():
             agg['avg_grade']      = round(agg['total_grade'] / agg['occurrences'], 2)
@@ -8563,53 +8559,19 @@ def doctor_rubric_repertorize(request):
 
         medicine_chart.sort(key=lambda x: (x['occurrences'], x['total_grade']), reverse=True)
 
-        # ── Step 5: Build per-symptom breakdown for the table view ───────────
-        # For each symptom, list every rubric that matched it + that rubric's medicines
-        symptoms_breakdown = []
-        for raw_sentence in symptoms_raw:
-            sentence_words = sentence_tokens.get(str(raw_sentence), [])
-            if not sentence_words:
-                continue
-
-            sym_rubrics = []
-            for item in scored:
-                # If ANY of the extracted tokens from this sentence matched the rubric:
-                if any(w in item['matched_symptoms'] for w in sentence_words):
-                    sym_rubrics.append({
-                        'id':             item['rubric']['id'],
-                        'name':           item['rubric']['name'],
-                        'name_hindi':     item['rubric']['name_hindi'],
-                        'full_path':      item['rubric']['full_path'],
-                        'score':          item['score'],
-                        'medicine_count': item['rubric']['medicine_count'],
-                        'modalities':     item['rubric']['modalities'],
-                        'synonyms':       item['rubric']['synonyms'],
-                        'medicines':      item['medicines'][:5],   # top 5 per rubric
-                    })
-            # Sort rubrics for this symptom by score
-            sym_rubrics.sort(key=lambda r: r['score'], reverse=True)
-            symptoms_breakdown.append({
-                'symptom':       raw_sentence,
-                'rubric_count':  len(sym_rubrics),
-                'rubrics':       sym_rubrics[:5],   # top 5 rubrics per symptom
-            })
         return JsonResponse({
             'success':             True,
             'chapter_id':          chapter_id,
             'symptoms':            symptoms,
-            'total_matched':       len(scored),
-            'match_tier':          match_tier,   # 'name' | 'modality' | 'synonym' | None
-            'search_note':         {
-                'name':     'Matched by rubric name (English/Hindi)',
-                'modality': 'No name match — matched by modality (aggravation/amelioration)',
-                'synonym':  'No name/modality match — matched by synonym',
-            }.get(match_tier, 'No matches found'),
+            'total_matched':       len(top_rubrics),
+            'match_tier':          'scoring_engine',
+            'search_note':         'Rubrics matched using Scoring Engine (Name: 50, Modality: 30, Synonym: 20, Exact: 10)',
             'symptoms_breakdown':  symptoms_breakdown,
             'top_rubrics':    [
                 {**item['rubric'],
-                 'score':            item['score'],
+                 'score':            round(item['score'], 2),
                  'matched_symptoms': item['matched_symptoms'],
-                 'matched_field':    item.get('matched_field', match_tier),
+                 'matched_field':    ", ".join(item['rubric'].get('matched_fields', [])),
                  'medicines':        item['medicines']}
                 for item in top_rubrics
             ],

@@ -432,7 +432,8 @@ export default function RubricsPage() {
           }
 
           // Tokenize symptom: split on spaces, commas, pipe, Hindi danda, periods, etc.
-          const tokens = lowerSym.split(/[\s,।|.:;!?]+/).filter(t => t.length >= 3);
+          const stopWords = new Set(["में", "का", "की", "से", "को", "पर", "और", "है", "हैं", "था", "थी", "थे", "वाला", "वाली", "वाले"]);
+          const tokens = lowerSym.split(/[\s,।|.:;!?]+/).filter(t => t.length >= 3 && !stopWords.has(t));
           
           // Score each token against the keyword index
           const scores: Record<string, number> = {};
@@ -923,7 +924,9 @@ export default function RubricsPage() {
                               <div className="flex flex-col gap-3">
                                 <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 shadow-sm border-l-4 border-l-indigo-500">
                                   <p className="text-sm md:text-base font-bold text-gray-800 leading-snug break-words">{rb.full_path || rb.name}</p>
-                                  {rb.name_hindi && <p className="text-xs text-orange-600 mt-1 break-words">{rb.name_hindi}</p>}
+                                  {rb.name_hindi && rb.name_hindi.trim() !== rb.name.trim() && (
+                                    <p className="text-xs text-orange-600 mt-1 break-words">{rb.name_hindi}</p>
+                                  )}
                                 </div>
                               </div>
                             </td>
