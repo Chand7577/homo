@@ -84,7 +84,7 @@ const KEYWORD_INDEX: Record<string, string> = {
   // ── Abdomen ───────────────────────────────────────────────────────────────
   abdomen:"Abdomen", abdominal:"Abdomen", belly:"Abdomen",
   distension:"Abdomen", flatulence:"Abdomen", bloat:"Abdomen",
-  "पेड़ू":"Abdomen", "गैस":"Abdomen",
+  "पेड़ू":"Abdomen", "गैस":"Abdomen", "पसली":"Abdomen", "पसलियों":"Abdomen",
 
   // ── Rectum ────────────────────────────────────────────────────────────────
   stool:"Rectum", constipat:"Rectum", diarrhea:"Rectum", rectal:"Rectum",
@@ -156,7 +156,7 @@ const KEYWORD_INDEX: Record<string, string> = {
   // ── Generalities ──────────────────────────────────────────────────────────
   weakness:"Generalities", fatigue:"Generalities",
   perspiration:"Generalities", sweat:"Generalities", debility:"Generalities",
-  "कमजोरी":"Generalities", "थकान":"Generalities", "पसीना":"Generalities",
+  "कमजोरी":"Generalities", "थकान":"Generalities", "पसीना":"Generalities", "दर्द":"Generalities", "पीड़ा":"Generalities",
 } as Record<string, string>;
 
 // Exact phrase index to override single-word tokens
@@ -444,11 +444,16 @@ export default function RubricsPage() {
               scores[KEYWORD_INDEX[token]] = (scores[KEYWORD_INDEX[token]] || 0) + weight;
               continue;
             }
-            // Prefix / substring match (handles plural, conjugations)
+            // Prefix / substring match (handles plural, conjugations safely)
             for (const [kw, chName] of Object.entries(KEYWORD_INDEX)) {
-              if (token.includes(kw) || kw.includes(token)) {
-                // GENERALITIES gets a lower weight so specific chapters always beat it in ties
-                const weight = (chName === "GENERALITIES") ? 3 : 6;
+              if (token === kw || (token.length >= 4 && kw.length >= 4 && (token.startsWith(kw) || kw.startsWith(token)))) {
+                // Anatomy chapters get 10 points (highly specific)
+                // Condition chapters (Skin, Fever, Sleep) get 5 points
+                // Generalities get 3 points
+                let weight = 10;
+                if (chName === "GENERALITIES") weight = 3;
+                else if (["Skin", "Fever", "Sleep", "Nervous"].includes(chName as string)) weight = 5;
+                
                 scores[chName as string] = (scores[chName as string] || 0) + weight;
               }
             }
