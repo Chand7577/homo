@@ -4602,140 +4602,305 @@ def get_doctor_popular_medicines(request):
 @csrf_exempt
 def intelligent_rubric_search(request):
     """
-    Optimized search for rubrics with prefetched related data
+    Intelligent rubric search with body-part routing and Python-side scoring.
+    
+    Strategy:
+    - Detect body-part keywords (head, eyes, ears, throat, stomach...) from the query
+    - If a body part is found: restrict DB search to that chapter ONLY
+    - Fetch candidates using only name/synonym JOINs (no modality JOINs to avoid fan-out)
+    - Score each rubric in Python: name match > modality match > synonym match > description match
+    - Return top 10 by score
     """
     if request.method != "GET":
         return JsonResponse({'error': 'GET method required'}, status=405)
-    
+
     doctor_id = request.session.get('doctor_id')
     if not doctor_id:
         return JsonResponse({'error': 'Not authenticated'}, status=401)
-    
+
     try:
-        # Get search query
+        import re
         query = request.GET.get('query', '').strip()
-        
+
         if not query or len(query) < 2:
             return JsonResponse({
                 'success': True,
                 'rubrics': [],
                 'message': 'Query too short. Please enter at least 2 characters.'
             })
-        
-        # 1. Advanced NLP Search: Implement tokenization and filler word removal
-        import re
-        
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 1. TOKENISATION — strip filler words
+        # ─────────────────────────────────────────────────────────────────────
         filler_words = {
-            'i', 'have', 'a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'am', 'was', 'were', 'been', 
-            'my', 'mine', 'me', 'he', 'she', 'it', 'they', 'them', 'their', 'we', 'us', 'our', 
-            'in', 'on', 'at', 'to', 'for', 'with', 'about', 'of', 'from', 'by', 'as', 'that', 'this', 
-            'these', 'those', 'doctor', 'please', 'help', 'sir', 'madam', 'suffering', 'since', 
-            'days', 'months', 'years', 'feeling', 'feel', 'when', 'what', 'where', 'why', 'how', 'who',
-            'can', 'could', 'would', 'should', 'will', 'very', 'much', 'too', 'lot', 'getting', 'got'
+            'i', 'have', 'a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'am',
+            'was', 'were', 'been', 'my', 'mine', 'me', 'he', 'she', 'it', 'they',
+            'them', 'their', 'we', 'us', 'our', 'in', 'on', 'at', 'to', 'for',
+            'with', 'about', 'of', 'from', 'by', 'as', 'that', 'this', 'these',
+            'those', 'doctor', 'please', 'help', 'sir', 'madam', 'suffering',
+            'since', 'days', 'months', 'years', 'feeling', 'feel', 'when', 'what',
+            'where', 'why', 'how', 'who', 'can', 'could', 'would', 'should',
+            'will', 'very', 'much', 'too', 'lot', 'getting', 'got'
         }
-        
-        # Extract words (English and potential transliterated Hindi)
         tokens = re.findall(r'\b\w+\b', query.lower())
         search_words = [w for w in tokens if len(w) > 2 and w not in filler_words]
-        
         if not search_words:
-            # Fallback to the original query if filtering removed everything
-            search_words = [query.strip()]
-            
-        # Build dynamic query
-        q_obj = Q()
-        
-        # 2. Support Hyphen-Separated Hierarchical Search (Main - Sub)
+            search_words = tokens if tokens else [query.lower()]
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 2. BODY-PART ROUTING
+        #    Maps common English keywords → chapter names in the DB
+        # ─────────────────────────────────────────────────────────────────────
+        BODY_PART_MAP = {
+            'head': 'Head',
+            'mind': 'Mind',
+            'mental': 'Mind',
+            'eye': 'Eyes',
+            'eyes': 'Eyes',
+            'ear': 'Ears',
+            'ears': 'Ears',
+            'nose': 'Nose',
+            'throat': 'Throat',
+            'neck': 'Neck',
+            'chest': 'Chest',
+            'heart': 'Heart',
+            'stomach': 'Stomach',
+            'abdomen': 'Abdomen',
+            'gastric': 'Stomach',
+            'back': 'Back',
+            'skin': 'Skin',
+            'fever': 'Fever',
+            'sleep': 'Sleep',
+            'urinary': 'Urinary',
+            'urine': 'Urinary',
+            'stool': 'Rectum',
+            'rectum': 'Rectum',
+            'female': 'Female',
+            'male': 'Male',
+            'mouth': 'Mouth',
+            'teeth': 'Teeth',
+            'tooth': 'Teeth',
+            'tongue': 'Mouth',
+            'face': 'Face',
+            'hands': 'Extremities',
+            'legs': 'Extremities',
+            'extremities': 'Extremities',
+            'knee': 'Extremities',
+            'shoulder': 'Extremities',
+            'cervical': 'Cervical',
+            'spine': 'Back',
+        }
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 3. HYPHEN-SEPARATED SEARCH  e.g. "MIND - ANGER"
+        # ─────────────────────────────────────────────────────────────────────
         if '-' in query:
             parts = [p.strip() for p in query.split('-', 1)]
-            if len(parts) == 2:
+            if len(parts) == 2 and parts[0] and parts[1]:
                 main_part, sub_part = parts
-                # If hyphen is used, we look for sub_part within main_part (parent)
-                # This handles "MIND - ANGER" style queries
-                q_obj = (
-                    (Q(parent__name__icontains=main_part) | Q(parent__name_hindi__icontains=main_part)) &
-                    (
-                        Q(name__icontains=sub_part) | 
-                        Q(name_hindi__icontains=sub_part) |
-                        Q(description__icontains=sub_part) |
-                        Q(synonyms__synonym__icontains=sub_part) |
-                        Q(modalities__name__icontains=sub_part) |
-                        Q(modalities__name_hindi__icontains=sub_part)
-                    )
+                rubrics_qs = Rubric.objects.filter(
+                    is_active=True
+                ).filter(
+                    Q(parent__name__icontains=main_part) | Q(parent__name_hindi__icontains=main_part)
+                ).filter(
+                    Q(name__icontains=sub_part) |
+                    Q(name_hindi__icontains=sub_part) |
+                    Q(synonyms__synonym__icontains=sub_part)
+                ).distinct().select_related('parent').annotate(
+                    med_count=Count('medicine_grades', distinct=True)
+                )[:20]
+                rubrics_list_raw = list(rubrics_qs)
+
+                # Score in Python
+                scored = []
+                for rubric in rubrics_list_raw:
+                    score = 0
+                    rname = (rubric.name or '').lower()
+                    pname = (rubric.parent.name if rubric.parent else '').lower()
+                    if sub_part.lower() in rname:
+                        score += 100
+                    if main_part.lower() in pname:
+                        score += 50
+                    scored.append((score, rubric))
+
+                scored.sort(key=lambda x: -x[0])
+                rubrics_list_raw = [r for _, r in scored[:10]]
+
+                # Build response
+                return _build_rubric_response(rubrics_list_raw)
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 4. DETECT BODY PART IN QUERY
+        # ─────────────────────────────────────────────────────────────────────
+        detected_chapter = None
+        symptom_words = []  # words that are NOT the body part
+
+        for word in search_words:
+            chapter = BODY_PART_MAP.get(word)
+            if chapter and not detected_chapter:
+                detected_chapter = chapter
+            else:
+                symptom_words.append(word)
+
+        # If no symptom words remain (e.g. query = "head"), use all words
+        if not symptom_words:
+            symptom_words = search_words
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 5. BUILD DB FILTER — NO modality JOINs (prevents fan-out)
+        #    Only use name / synonym tables in the filter
+        # ─────────────────────────────────────────────────────────────────────
+        base_qs = Rubric.objects.filter(is_active=True).select_related('parent').annotate(
+            med_count=Count('medicine_grades', distinct=True)
+        )
+
+        if detected_chapter:
+            # Restrict to the detected chapter (parent name match)
+            base_qs = base_qs.filter(
+                Q(parent__name__iexact=detected_chapter) |
+                Q(parent__name__icontains=detected_chapter)
+            )
+            # Also filter by remaining symptom keywords (in name or synonym)
+            symptom_q = Q()
+            for word in symptom_words:
+                word_q = (
+                    Q(name__icontains=word) |
+                    Q(name_hindi__icontains=word) |
+                    Q(description__icontains=word) |
+                    Q(synonyms__synonym__icontains=word)
                 )
-        
-        if not q_obj:
-            # Standard multi-word search (Improved with AND logic for precision)
-            # Each word must match at least one of the fields
+                symptom_q = word_q if not symptom_q else symptom_q & word_q
+            if symptom_q:
+                base_qs = base_qs.filter(symptom_q)
+        else:
+            # No body-part detected: broad search across all chapters
+            # Each word must match in name, synonym, or description (no modality JOIN)
+            combined_q = Q()
             for word in search_words:
                 word_q = (
                     Q(name__icontains=word) |
                     Q(name_hindi__icontains=word) |
                     Q(description__icontains=word) |
                     Q(description_hindi__icontains=word) |
-                    Q(synonyms__synonym__icontains=word) |
-                    Q(modalities__name__icontains=word) |         # Added Modalities search
-                    Q(modalities__name_hindi__icontains=word)      # Added Modalities search
+                    Q(synonyms__synonym__icontains=word)
                 )
-                if not q_obj:
-                    q_obj = word_q
-                else:
-                    q_obj &= word_q  # Use AND for multiple words to increase precision
+                combined_q = word_q if not combined_q else combined_q & word_q
+            base_qs = base_qs.filter(combined_q)
 
-        # Optimize with annotation and prefetch
-        rubrics = Rubric.objects.filter(
-            Q(is_active=True) & q_obj
-        ).distinct().select_related('parent').annotate(
-            med_count=Count('medicine_grades', distinct=True)
-        ).prefetch_related('synonyms', 'modalities')
-        
-        # We only need top 3 rubrics as requested
-        rubrics = rubrics[:3]
-        
-        rubric_list = []
-        for rubric in rubrics:
-            # Synonyms are prefetched
-            synonyms = [s.synonym for s in rubric.synonyms.all()[:5]]
-            
-            # Fetch top 5 medicines for this rubric (grading)
-            grades = rubric.medicine_grades.select_related('medicine').order_by('-grade', 'medicine__name')[:5]
-            medicines_list = []
-            for mg in grades:
-                medicines_list.append({
-                    'name': mg.medicine.name,
-                    'grade': mg.grade,
-                    'grade_label': mg.get_grade_display()
-                })
-            
-            # Modalities are prefetched
-            modalities = [m.name for m in rubric.modalities.all()[:3]]
-            
-            rubric_list.append({
-                'id': rubric.id,
-                'name': rubric.name,
-                'name_hindi': rubric.name_hindi,
-                'description': rubric.description,
-                'full_path': rubric.get_full_path(),
-                'level': rubric.level,
-                'parent_name': rubric.parent.name if rubric.parent else None,
-                'medicine_count': rubric.med_count,
-                'synonyms': synonyms,
-                'modalities': modalities,  # Added modalities to response
-                'medicines': medicines_list,
-                'category': rubric.parent.name if rubric.parent and rubric.level == 1 else rubric.name if rubric.level == 0 else None,
-            })
-        
-        return JsonResponse({
-            'success': True,
-            'rubrics': rubric_list,
-            'total': len(rubric_list)
-        })
-    
+        # Fetch up to 50 candidates (Python scoring will pick the best)
+        rubrics_candidates = list(base_qs.distinct().prefetch_related('synonyms', 'modalities')[:50])
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 6. PYTHON-SIDE SCORING
+        #    Score each rubric based on how well it matches all words
+        # ─────────────────────────────────────────────────────────────────────
+        def score_rubric(rubric, words, chapter, full_query):
+            score = 0
+            rname = (rubric.name or '').lower()
+            rname_h = (rubric.name_hindi or '').lower()
+            rdesc = (rubric.description or '').lower()
+            rdesc_h = (rubric.description_hindi or '').lower()
+            pname = (rubric.parent.name if rubric.parent else '').lower()
+            synonyms_text = ' '.join(s.synonym.lower() for s in rubric.synonyms.all())
+            modalities_text = ' '.join(m.name.lower() for m in rubric.modalities.all())
+
+            fq = full_query.lower()
+
+            # Full query exact match in rubric name — highest possible score
+            if fq in rname or fq in rname_h:
+                score += 200
+
+            for word in words:
+                # Name match — very high
+                if word in rname or word in rname_h:
+                    score += 60
+                # Modality match — high (this is what doctor typed as a condition)
+                if word in modalities_text:
+                    score += 30
+                # Synonym match — medium
+                if word in synonyms_text:
+                    score += 20
+                # Description match — low
+                if word in rdesc or word in rdesc_h:
+                    score += 10
+
+            # Correct chapter bonus
+            if chapter and chapter.lower() in pname:
+                score += 50
+
+            return score
+
+        scored_rubrics = []
+        for rubric in rubrics_candidates:
+            s = score_rubric(rubric, search_words, detected_chapter, query)
+            scored_rubrics.append((s, rubric))
+
+        # Sort by score descending, then alphabetically for stable ordering
+        scored_rubrics.sort(key=lambda x: (-x[0], x[1].name or ''))
+        top_rubrics = [r for _, r in scored_rubrics[:10]]
+
+        return _build_rubric_response(top_rubrics)
+
     except Exception as e:
         logger.error(f"Error searching rubrics: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return JsonResponse({'error': f'Search failed: {str(e)}'}, status=500)
+
+
+def _build_rubric_response(rubrics):
+    """Helper: convert a list of Rubric objects to the standard JSON response."""
+    rubric_list = []
+    for rubric in rubrics:
+        # Synonyms (prefetched or fetched fresh)
+        try:
+            synonyms = [s.synonym for s in rubric.synonyms.all()[:5]]
+        except Exception:
+            synonyms = []
+
+        # Modalities (prefetched or fetched fresh)
+        try:
+            all_mods = rubric.modalities.all()
+            aggravations = [{'name': m.name, 'name_hindi': m.name_hindi}
+                            for m in all_mods if m.modality_type == 'aggravation'][:5]
+            ameliorations = [{'name': m.name, 'name_hindi': m.name_hindi}
+                             for m in all_mods if m.modality_type == 'amelioration'][:5]
+        except Exception:
+            aggravations = []
+            ameliorations = []
+
+        # Top medicines for this rubric
+        try:
+            grades = rubric.medicine_grades.select_related('medicine').order_by('-grade', 'medicine__name')[:5]
+            medicines_list = [{'name': mg.medicine.name, 'grade': mg.grade,
+                               'grade_label': mg.get_grade_display()} for mg in grades]
+        except Exception:
+            medicines_list = []
+
+        rubric_list.append({
+            'id': rubric.id,
+            'name': rubric.name,
+            'name_hindi': rubric.name_hindi,
+            'description': rubric.description,
+            'full_path': rubric.get_full_path(),
+            'level': rubric.level,
+            'parent_name': rubric.parent.name if rubric.parent else None,
+            'medicine_count': getattr(rubric, 'med_count', 0),
+            'synonyms': synonyms,
+            'modalities': {
+                'aggravations': aggravations,
+                'ameliorations': ameliorations,
+            },
+            'medicines': medicines_list,
+            'category': (rubric.parent.name if rubric.parent and rubric.level == 1
+                         else rubric.name if rubric.level == 0 else None),
+        })
+
+    return JsonResponse({
+        'success': True,
+        'rubrics': rubric_list,
+        'total': len(rubric_list)
+    })
 
 
 
