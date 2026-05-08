@@ -4742,9 +4742,11 @@ def intelligent_rubric_search(request):
             else:
                 symptom_words.append(word)
 
-        # If no symptom words remain (e.g. query = "head"), use all words
-        if not symptom_words:
-            symptom_words = search_words
+        # Track if we have actual symptom words beyond the body part
+        has_symptom_words = bool(symptom_words)
+
+        # For scoring: use all search words
+        scoring_words = search_words
 
         # ─────────────────────────────────────────────────────────────────────
         # 5. BUILD DB FILTER — NO modality JOINs (prevents fan-out)
@@ -4756,22 +4758,29 @@ def intelligent_rubric_search(request):
 
         if detected_chapter:
             # Restrict to the detected chapter (parent name match)
-            base_qs = base_qs.filter(
+            chapter_filter = (
                 Q(parent__name__iexact=detected_chapter) |
                 Q(parent__name__icontains=detected_chapter)
             )
-            # Also filter by remaining symptom keywords (in name or synonym)
-            symptom_q = Q()
-            for word in symptom_words:
-                word_q = (
-                    Q(name__icontains=word) |
-                    Q(name_hindi__icontains=word) |
-                    Q(description__icontains=word) |
-                    Q(synonyms__synonym__icontains=word)
-                )
-                symptom_q = word_q if not symptom_q else symptom_q & word_q
-            if symptom_q:
-                base_qs = base_qs.filter(symptom_q)
+            base_qs = base_qs.filter(chapter_filter)
+
+            if has_symptom_words:
+                # Also filter by remaining symptom keywords (in name or synonym)
+                symptom_q = Q()
+                for word in symptom_words:
+                    word_q = (
+                        Q(name__icontains=word) |
+                        Q(name_hindi__icontains=word) |
+                        Q(description__icontains=word) |
+                        Q(synonyms__synonym__icontains=word)
+                    )
+                    symptom_q = word_q if not symptom_q else symptom_q & word_q
+
+                # Apply symptom filter; fall back to chapter-only if nothing matches
+                chapter_and_symptom = base_qs.filter(symptom_q)
+                if chapter_and_symptom.exists():
+                    base_qs = chapter_and_symptom
+                # else: base_qs stays as chapter-only (all rubrics in that chapter)
         else:
             # No body-part detected: broad search across all chapters
             # Each word must match in name, synonym, or description (no modality JOIN)
