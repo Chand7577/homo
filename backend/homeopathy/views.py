@@ -4640,25 +4640,54 @@ def intelligent_rubric_search(request):
         
         if not search_words:
             # Fallback to the original query if filtering removed everything
-            search_words = [query]
+            search_words = [query.strip()]
             
         # Build dynamic query
         q_obj = Q()
-        for word in search_words:
-            q_obj |= (
-                Q(name__icontains=word) |
-                Q(name_hindi__icontains=word) |
-                Q(description__icontains=word) |
-                Q(description_hindi__icontains=word) |
-                Q(synonyms__synonym__icontains=word)
-            )
+        
+        # 2. Support Hyphen-Separated Hierarchical Search (Main - Sub)
+        if '-' in query:
+            parts = [p.strip() for p in query.split('-', 1)]
+            if len(parts) == 2:
+                main_part, sub_part = parts
+                # If hyphen is used, we look for sub_part within main_part (parent)
+                # This handles "MIND - ANGER" style queries
+                q_obj = (
+                    (Q(parent__name__icontains=main_part) | Q(parent__name_hindi__icontains=main_part)) &
+                    (
+                        Q(name__icontains=sub_part) | 
+                        Q(name_hindi__icontains=sub_part) |
+                        Q(description__icontains=sub_part) |
+                        Q(synonyms__synonym__icontains=sub_part) |
+                        Q(modalities__name__icontains=sub_part) |
+                        Q(modalities__name_hindi__icontains=sub_part)
+                    )
+                )
+        
+        if not q_obj:
+            # Standard multi-word search (Improved with AND logic for precision)
+            # Each word must match at least one of the fields
+            for word in search_words:
+                word_q = (
+                    Q(name__icontains=word) |
+                    Q(name_hindi__icontains=word) |
+                    Q(description__icontains=word) |
+                    Q(description_hindi__icontains=word) |
+                    Q(synonyms__synonym__icontains=word) |
+                    Q(modalities__name__icontains=word) |         # Added Modalities search
+                    Q(modalities__name_hindi__icontains=word)      # Added Modalities search
+                )
+                if not q_obj:
+                    q_obj = word_q
+                else:
+                    q_obj &= word_q  # Use AND for multiple words to increase precision
 
         # Optimize with annotation and prefetch
         rubrics = Rubric.objects.filter(
             Q(is_active=True) & q_obj
         ).distinct().select_related('parent').annotate(
             med_count=Count('medicine_grades', distinct=True)
-        ).prefetch_related('synonyms')
+        ).prefetch_related('synonyms', 'modalities')
         
         # We only need top 3 rubrics as requested
         rubrics = rubrics[:3]
@@ -4678,6 +4707,9 @@ def intelligent_rubric_search(request):
                     'grade_label': mg.get_grade_display()
                 })
             
+            # Modalities are prefetched
+            modalities = [m.name for m in rubric.modalities.all()[:3]]
+            
             rubric_list.append({
                 'id': rubric.id,
                 'name': rubric.name,
@@ -4688,6 +4720,7 @@ def intelligent_rubric_search(request):
                 'parent_name': rubric.parent.name if rubric.parent else None,
                 'medicine_count': rubric.med_count,
                 'synonyms': synonyms,
+                'modalities': modalities,  # Added modalities to response
                 'medicines': medicines_list,
                 'category': rubric.parent.name if rubric.parent and rubric.level == 1 else rubric.name if rubric.level == 0 else None,
             })
