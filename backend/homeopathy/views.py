@@ -8598,11 +8598,8 @@ def doctor_rubric_repertorize(request):
 
             candidates = base_qs.filter(id__in=candidate_ids).distinct()
 
-            best_rubric_data = None
-            best_score = -9999
-
-            # Normalize symptom string for exact match checks
-            sym_normalized = " ".join(tokens)
+            # Accumulate scores for ALL rubrics for this symptom
+            scored_candidates = []
 
             for rubric in candidates:
                 score = 0
@@ -8662,27 +8659,25 @@ def doctor_rubric_repertorize(request):
                             has_synonym_match = True
                             break
 
-                # Apply main scores based on the new logic
+                # Apply main scores cumulatively
                 if has_name_match:
                     score += 50
                     matched_fields.append('name')
-                elif has_modality_match:
+                if has_modality_match:
                     score += 30
                     matched_fields.append('modality')
-                elif has_synonym_match:
+                if has_synonym_match:
                     score += 20
                     matched_fields.append('synonym')
                 
-                # If no primary fields matched but we somehow got here, ignore
                 if not matched_fields:
                     continue
 
-                # Tie-breakers: penalize long rubric names, reward more medicines
+                # Tie-breakers
                 score -= len(rubric.name) * 0.001
                 score += rubric.medicine_grades.count() * 0.0001
 
-                if score > best_score:
-                    best_score = score
+                if score > 0:
                     # Collect medicines
                     medicines = []
                     for mg in rubric.medicine_grades.all():
@@ -8694,7 +8689,7 @@ def doctor_rubric_repertorize(request):
                             'grade_label': mg.get_grade_display(),
                         })
 
-                    best_rubric_data = {
+                    scored_candidates.append({
                         'rubric': {
                             'id': rubric.id,
                             'name': rubric.name,
@@ -8714,26 +8709,32 @@ def doctor_rubric_repertorize(request):
                         'score': score,
                         'matched_symptoms': list(all_search_tokens),
                         'medicines': medicines,
-                    }
+                    })
 
-            if best_rubric_data and best_score > 0:
+            if scored_candidates:
+                # Sort by score and take top 7
+                scored_candidates.sort(key=lambda x: x['score'], reverse=True)
+                top_for_sym = scored_candidates[:7]
+
                 symptoms_breakdown.append({
                     'symptom': sym_str,
-                    'rubric_count': 1,
-                    'rubrics': [{
-                        **best_rubric_data['rubric'],
-                        'score': round(best_rubric_data['score'], 2),
-                        'matched_symptoms': best_rubric_data['matched_symptoms'],
-                        'medicines': best_rubric_data['medicines']
-                    }],
-                    'score': best_score,
-                    'exact_match': 'exact_match' in best_rubric_data['rubric']['matched_fields']
+                    'rubric_count': len(top_for_sym),
+                    'rubrics': [
+                        {
+                            **item['rubric'],
+                            'score': round(item['score'], 2),
+                            'matched_symptoms': item['matched_symptoms'],
+                            'medicines': item['medicines']
+                        } for item in top_for_sym
+                    ],
+                    'score': top_for_sym[0]['score'] if top_for_sym else 0
                 })
-                # Add to all_selected_rubrics_dict
-                r_id = best_rubric_data['rubric']['id']
-                # If the same rubric is matched by multiple symptoms, keep the one with the highest score
-                if r_id not in all_selected_rubrics_dict or best_score > all_selected_rubrics_dict[r_id]['score']:
-                    all_selected_rubrics_dict[r_id] = best_rubric_data
+                
+                # Update all_selected_rubrics_dict for global chart
+                for item in top_for_sym:
+                    r_id = item['rubric']['id']
+                    if r_id not in all_selected_rubrics_dict or item['score'] > all_selected_rubrics_dict[r_id]['score']:
+                        all_selected_rubrics_dict[r_id] = item
             else:
                 symptoms_breakdown.append({
                     'symptom': sym_str,

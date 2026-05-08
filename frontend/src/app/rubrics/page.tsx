@@ -859,10 +859,11 @@ export default function RubricsPage() {
             <div className="flex-1 p-6 bg-gray-50/50 w-full overflow-hidden flex flex-col">
               <div className="w-full h-full bg-white rounded-2xl border border-gray-200 shadow-sm overflow-y-auto">
                 <table className="w-full text-left text-sm table-fixed border-collapse border border-gray-200">
-                  <thead className="sticky top-0 z-50 shadow-sm border-b border-indigo-200 bg-red-400">
+                  <thead className="sticky top-0 z-50 shadow-sm border-b border-indigo-200">
                     <tr>
-                      <th style={{width:'20%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Symptom</th>
-                      <th style={{width:'55%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Matched Rubric</th>
+                      <th style={{width:'15%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Symptom</th>
+                      <th style={{width:'35%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Matched Rubric</th>
+                      <th style={{width:'25%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Medicines</th>
                       <th style={{width:'15%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 border-r border-gray-200">Modalities</th>
                       <th style={{width:'10%'}} className="p-4 font-black text-indigo-800 bg-indigo-50 text-right">Synonyms</th>
                     </tr>
@@ -877,8 +878,10 @@ export default function RubricsPage() {
                         if (result && result.symptoms_breakdown) {
                           result.symptoms_breakdown.forEach(row => {
                             if (row.rubrics && row.rubrics.length > 0) {
-                              // Only take the single best matched rubric for this symptom
-                              allSymptomRows.push({ chapter, symptom: row.symptom, rubric: row.rubrics[0] });
+                              // Show top rubrics for this symptom
+                              row.rubrics.forEach(rb => {
+                                allSymptomRows.push({ chapter, symptom: row.symptom, rubric: rb });
+                              });
                             }
                           });
                         }
@@ -886,7 +889,7 @@ export default function RubricsPage() {
 
                       if (allSymptomRows.length === 0) {
                         return (
-                          <tr><td colSpan={4} className="p-8 text-center text-gray-500">No matched rubrics found for your symptoms.</td></tr>
+                          <tr><td colSpan={5} className="p-8 text-center text-gray-500">No matched rubrics found for your symptoms.</td></tr>
                         );
                       }
 
@@ -936,8 +939,32 @@ export default function RubricsPage() {
                               </div>
                             </td>
 
+                            {/* Medicines */}
+                            <td className="p-4 bg-white border-r border-gray-200">
+                              <div className="flex flex-wrap gap-2">
+                                {(rb.medicines || []).slice(0, 15).map((med, mi) => (
+                                  <span 
+                                    key={mi} 
+                                    className={`px-2 py-1 rounded text-[10px] font-black tracking-tight border ${
+                                      med.grade === 3 ? "bg-red-50 text-red-700 border-red-100" :
+                                      med.grade === 2 ? "bg-blue-50 text-blue-700 border-blue-100" :
+                                      "bg-gray-50 text-gray-600 border-gray-100"
+                                    }`}
+                                  >
+                                    {med.name} {med.grade > 1 && <span className="opacity-50 ml-0.5">({med.grade})</span>}
+                                  </span>
+                                ))}
+                                {(rb.medicines || []).length > 15 && (
+                                  <span className="text-[10px] text-gray-400 font-bold">+{rb.medicines.length - 15} more</span>
+                                )}
+                                {(rb.medicines || []).length === 0 && (
+                                  <span className="text-xs text-gray-400 italic">No medicines listed</span>
+                                )}
+                              </div>
+                            </td>
+
                             {/* Modalities */}
-                            <td className="p-1 bg-white border-r border-gray-200">
+                            <td className="p-4 bg-white border-r border-gray-200">
                               <div className="flex flex-col gap-3">
                                 {aggravationPairs.length > 0 && (
                                   <div>
@@ -970,7 +997,7 @@ export default function RubricsPage() {
                             </td>
 
                             {/* Synonyms */}
-                            <td className="p-1 align-top text-right bg-white">
+                            <td className="p-4 align-top text-right bg-white">
                               <div className="flex flex-wrap gap-1 justify-end">
                                 {synonymPairs.length > 0 ? synonymPairs.map((s, i) => (
                                   <span key={i} className="px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded text-[10px] border border-amber-200 inline-block break-words font-semibold">
