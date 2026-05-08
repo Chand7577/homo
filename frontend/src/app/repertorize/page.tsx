@@ -796,20 +796,31 @@ const DoctorRepertorize = () => {
                           </div>
                         </div>
 
-                        {/* Coverage Bar */}
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div
-                            className={`h-2.5 rounded-full ${
-                              medicine.coverage_percentage >= 80
-                                ? "bg-green-500"
-                                : medicine.coverage_percentage >= 50
-                                  ? "bg-yellow-500"
-                                  : "bg-orange-500"
-                            }`}
-                            style={{
-                              width: `${medicine.coverage_percentage}%`,
-                            }}
-                          ></div>
+                        {/* Coverage Timeline */}
+                        <div className="relative mt-2 mb-6">
+                          <div className="w-full bg-gray-100 rounded-full h-3 border border-gray-200 overflow-hidden shadow-inner">
+                            <div
+                              className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${
+                                medicine.coverage_percentage >= 80
+                                  ? "bg-gradient-to-r from-emerald-400 to-emerald-600"
+                                  : medicine.coverage_percentage >= 50
+                                    ? "bg-gradient-to-r from-amber-400 to-amber-600"
+                                    : "bg-gradient-to-r from-rose-400 to-rose-600"
+                              }`}
+                              style={{
+                                width: `${medicine.coverage_percentage}%`,
+                              }}
+                            ></div>
+                          </div>
+                          {/* Timeline Markers */}
+                          <div className="absolute top-4 left-0 w-full flex justify-between px-0.5">
+                            {[0, 25, 50, 75, 100].map((mark) => (
+                              <div key={mark} className="flex flex-col items-center">
+                                <div className="h-1.5 w-0.5 bg-gray-300 mb-1"></div>
+                                <span className="text-[10px] font-bold text-gray-400">{mark}%</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
                         {/* Rubric Details */}

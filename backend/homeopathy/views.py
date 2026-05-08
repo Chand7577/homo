@@ -4724,7 +4724,7 @@ def intelligent_rubric_search(request):
                     scored.append((score, rubric))
 
                 scored.sort(key=lambda x: -x[0])
-                rubrics_list_raw = [r for _, r in scored[:10]]
+                rubrics_list_raw = [r for _, r in scored[:7]]
 
                 # Build response
                 return _build_rubric_response(rubrics_list_raw)
@@ -4846,7 +4846,7 @@ def intelligent_rubric_search(request):
 
         # Sort by score descending, then alphabetically for stable ordering
         scored_rubrics.sort(key=lambda x: (-x[0], x[1].name or ''))
-        top_rubrics = [r for _, r in scored_rubrics[:10]]
+        top_rubrics = [r for _, r in scored_rubrics[:7]]
 
         return _build_rubric_response(top_rubrics)
 
@@ -8781,7 +8781,7 @@ def doctor_rubric_repertorize(request):
                  'matched_symptoms': item['matched_symptoms'],
                  'matched_field':    ", ".join(item['rubric'].get('matched_fields', [])),
                  'medicines':        item['medicines']}
-                for item in top_rubrics
+                for item in top_rubrics[:7]
             ],
             'medicine_chart': medicine_chart,
         })

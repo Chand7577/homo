@@ -403,7 +403,7 @@ export default function RubricsPage() {
               const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
                 method: "POST", credentials: "include",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chapter_id: chapter.id, symptoms: chapterSymptoms[chapter.id], top_n: 8 }),
+                body: JSON.stringify({ chapter_id: chapter.id, symptoms: chapterSymptoms[chapter.id], top_n: 7 }),
               });
               const data = await res.json();
               if (res.ok && data.success) newResults[chapter.id] = data;
@@ -522,7 +522,7 @@ export default function RubricsPage() {
             const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
               method: "POST", credentials: "include",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chapter_id: chapter.id, symptoms: syms, top_n: 8 }),
+              body: JSON.stringify({ chapter_id: chapter.id, symptoms: syms, top_n: 7 }),
             });
             const data = await res.json();
             if (res.ok && data.success) newResults[chapter.id] = data;
@@ -1023,7 +1023,64 @@ export default function RubricsPage() {
                   
                   if (sorted.length === 0) return null;
 
+                  // Compute data for horizontal timeline
+                  const maxChartScore = sorted[0].score || 1;
+
                   return (
+                    <>
+                      {/* Horizontal Timeline Chart */}
+                      <div className="p-6 bg-white border-t border-gray-100 animate-in slide-in-from-bottom-4">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                            <TrendingUp className="w-5 h-5 text-indigo-500" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-black text-gray-900">Remedy Indicator Timeline</h3>
+                            <p className="text-xs text-gray-500 font-medium">Visualization of medicine coverage and intensity</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                          {sorted.slice(0, 10).map((med, i) => {
+                            const pct = Math.min(100, (med.score / maxChartScore) * 100);
+                            return (
+                              <div key={med.id} className="space-y-2">
+                                <div className="flex justify-between items-end">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black text-indigo-400 w-5">#{i+1}</span>
+                                    <span className="text-sm font-bold text-gray-800">{med.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">SCORE {med.score}</span>
+                                    <span className="text-xs font-black text-indigo-600">{Math.round(pct)}%</span>
+                                  </div>
+                                </div>
+                                <div className="relative pt-1">
+                                  <div className="overflow-hidden h-2.5 text-xs flex rounded-full bg-gray-100 border border-gray-200">
+                                    <div
+                                      style={{ width: `${pct}%` }}
+                                      className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-1000 ${
+                                        pct > 80 ? 'bg-gradient-to-r from-indigo-500 to-indigo-600' : 
+                                        pct > 50 ? 'bg-gradient-to-r from-blue-400 to-blue-500' : 
+                                        'bg-gradient-to-r from-slate-400 to-slate-500'
+                                      }`}
+                                    ></div>
+                                  </div>
+                                  {/* Timeline markers */}
+                                  <div className="flex justify-between mt-1 px-0.5">
+                                    {[0, 25, 50, 75, 100].map(m => (
+                                      <div key={m} className="flex flex-col items-center">
+                                        <div className="h-1 w-px bg-gray-200"></div>
+                                        <span className="text-[8px] font-bold text-gray-300">{m}%</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     <div className="p-6 bg-gray-50/30 border-t border-gray-100 animate-in slide-in-from-bottom-4 duration-500 overflow-x-auto">
                       <div className="flex items-center justify-between mb-6 min-w-[800px]">
                         <div className="flex items-center gap-3">
