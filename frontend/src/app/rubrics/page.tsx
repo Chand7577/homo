@@ -861,30 +861,33 @@ export default function RubricsPage() {
                 <table className="w-full text-left text-sm table-fixed border-collapse border border-gray-200">
                   <thead className="sticky top-0 z-50 shadow-sm">
                     <tr>
-                      <th style={{width:'18%'}} className="p-5 font-black text-slate-700 bg-slate-50/90 backdrop-blur-md border-b border-r border-slate-200 uppercase text-[11px] tracking-widest">Symptom & Chapter</th>
-                      <th style={{width:'32%'}} className="p-5 font-black text-slate-700 bg-slate-50/90 backdrop-blur-md border-b border-r border-slate-200 uppercase text-[11px] tracking-widest">Selected Rubric</th>
-                      <th style={{width:'30%'}} className="p-5 font-black text-slate-700 bg-slate-50/90 backdrop-blur-md border-b border-r border-slate-200 uppercase text-[11px] tracking-widest">Remedy Indicators</th>
-                      <th style={{width:'20%'}} className="p-5 font-black text-slate-700 bg-slate-50/90 backdrop-blur-md border-b border-slate-200 uppercase text-[11px] tracking-widest text-right">Clinical Context</th>
+                      <th style={{width:'15%'}} className="p-5 font-black text-slate-700 bg-slate-50/90 backdrop-blur-md border-b border-r border-slate-200 uppercase text-[10px] tracking-widest">Symptom & Chapter</th>
+                      <th style={{width:'30%'}} className="p-5 font-black text-slate-700 bg-slate-50/90 backdrop-blur-md border-b border-r border-slate-200 uppercase text-[10px] tracking-widest">Matched Rubric</th>
+                      <th style={{width:'25%'}} className="p-5 font-black text-slate-700 bg-slate-50/90 backdrop-blur-md border-b border-r border-slate-200 uppercase text-[10px] tracking-widest text-center">Clinical Context</th>
+                      <th style={{width:'30%'}} className="p-5 font-black text-slate-700 bg-slate-50/90 backdrop-blur-md border-b border-slate-200 uppercase text-[10px] tracking-widest text-right">Remedy Indicators</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 align-top bg-white">
                     {(() => {
-                      const allSymptomRows: { chapter: Chapter, symptom: string, rubric: any }[] = [];
+                      // Group by symptom for rowSpan logic
+                      const groupedSymptoms: { symptom: string, chapter: Chapter, rubrics: any[] }[] = [];
                       
                       (selectedChapters.length > 0 ? selectedChapters : identifiedChapters).forEach((chapter) => {
                         const result = analysisResults[chapter.id];
                         if (result && result.symptoms_breakdown) {
                           result.symptoms_breakdown.forEach(row => {
                             if (row.rubrics && row.rubrics.length > 0) {
-                              row.rubrics.forEach(rb => {
-                                allSymptomRows.push({ chapter, symptom: row.symptom, rubric: rb });
+                              groupedSymptoms.push({
+                                symptom: row.symptom,
+                                chapter: chapter,
+                                rubrics: row.rubrics
                               });
                             }
                           });
                         }
                       });
 
-                      if (allSymptomRows.length === 0) {
+                      if (groupedSymptoms.length === 0) {
                         return (
                           <tr>
                             <td colSpan={4} className="p-20 text-center">
@@ -894,7 +897,7 @@ export default function RubricsPage() {
                                 </div>
                                 <div>
                                   <p className="text-lg font-bold text-slate-800">No matches found</p>
-                                  <p className="text-sm text-slate-500">Try adjusting your symptom keywords or chapter selection.</p>
+                                  <p className="text-sm text-slate-500">Try adjusting your symptoms or chapter selection.</p>
                                 </div>
                               </div>
                             </td>
@@ -902,97 +905,100 @@ export default function RubricsPage() {
                         );
                       }
 
-                      return allSymptomRows.map((item, idx) => {
-                        const chapter = item.chapter;
-                        const rb = item.rubric;
+                      return groupedSymptoms.map((group, groupIdx) => {
+                        return group.rubrics.map((rb, rbIdx) => {
+                          const synonyms = (rb.synonyms || []).map((s: any) => 
+                            typeof s === 'string' ? s : (s.synonym || "")
+                          ).filter(Boolean).slice(0, 4);
 
-                        const synonyms = (rb.synonyms || []).map((s: any) => 
-                          typeof s === 'string' ? s : (s.synonym || "")
-                        ).filter(Boolean).slice(0, 5);
+                          const aggrs = (rb.modalities?.aggravations || []).map((m: any) => m.name).slice(0, 3);
+                          const amels = (rb.modalities?.ameliorations || []).map((m: any) => m.name).slice(0, 3);
 
-                        const aggrs = (rb.modalities?.aggravations || []).map((m: any) => m.name).slice(0, 4);
-                        const amels = (rb.modalities?.ameliorations || []).map((m: any) => m.name).slice(0, 4);
-
-                        return (
-                          <tr key={`${chapter.id}-${idx}`} className="group hover:bg-indigo-50/30 transition-all duration-300">
-                            {/* Symptom & Chapter */}
-                            <td className="p-5 border-r border-slate-100 relative">
-                              <div className="flex flex-col gap-2">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-tight w-fit">
-                                  {chapter.name}
-                                </span>
-                                <p className="text-sm font-bold text-slate-900 leading-snug group-hover:text-indigo-900 transition-colors">{item.symptom}</p>
-                              </div>
-                            </td>
-
-                            {/* Selected Rubric */}
-                            <td className="p-5 border-r border-slate-100">
-                              <div className="bg-white rounded-xl p-3.5 border border-slate-100 shadow-sm ring-1 ring-slate-900/5 group-hover:ring-indigo-500/20 transition-all">
-                                <p className="text-sm font-bold text-slate-800 leading-relaxed mb-1.5">{rb.full_path || rb.name}</p>
-                                {rb.name_hindi && (
-                                  <div className="flex items-center gap-1.5">
-                                    <Tag className="w-3 h-3 text-orange-400" />
-                                    <p className="text-xs font-medium text-orange-600/90 italic">{rb.name_hindi}</p>
+                          return (
+                            <tr key={`${groupIdx}-${rbIdx}`} className={`group hover:bg-indigo-50/20 transition-colors ${rbIdx === 0 ? 'border-t-2 border-slate-100' : ''}`}>
+                              {/* Symptom & Chapter (Grouped with rowSpan) */}
+                              {rbIdx === 0 && (
+                                <td rowSpan={group.rubrics.length} className="p-5 border-r border-slate-100 bg-slate-50/30">
+                                  <div className="flex flex-col gap-2.5 sticky top-24">
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest w-fit shadow-sm shadow-indigo-100">
+                                      {group.chapter.name}
+                                    </span>
+                                    <p className="text-sm font-black text-slate-900 leading-tight uppercase">{group.symptom}</p>
+                                    <div className="h-0.5 w-8 bg-indigo-200 rounded-full"></div>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
+                                      {group.rubrics.length} Matched Rubrics
+                                    </p>
                                   </div>
-                                )}
-                              </div>
-                            </td>
+                                </td>
+                              )}
 
-                            {/* Remedy Indicators */}
-                            <td className="p-5 border-r border-slate-100">
-                              <div className="flex flex-wrap gap-1.5">
-                                {(rb.medicines || []).slice(0, 12).map((med, mi) => (
-                                  <div 
-                                    key={mi} 
-                                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-bold border transition-all hover:scale-105 cursor-default ${
-                                      med.grade === 3 ? "bg-rose-50 text-rose-700 border-rose-100 shadow-sm shadow-rose-100" :
-                                      med.grade === 2 ? "bg-blue-50 text-blue-700 border-blue-100 shadow-sm shadow-blue-100" :
-                                      "bg-slate-50 text-slate-600 border-slate-200"
-                                    }`}
-                                  >
-                                    <Pill className={`w-2.5 h-2.5 ${med.grade === 3 ? "text-rose-400" : med.grade === 2 ? "text-blue-400" : "text-slate-400"}`} />
-                                    {med.name}
-                                  </div>
-                                ))}
-                                {(rb.medicines || []).length > 12 && (
-                                  <span className="text-[10px] text-slate-400 font-black self-center ml-1">+{rb.medicines.length - 12} MORE</span>
-                                )}
-                              </div>
-                            </td>
+                              {/* Matched Rubric */}
+                              <td className="p-5 border-r border-slate-100">
+                                <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm ring-1 ring-slate-900/5 group-hover:ring-indigo-500/20 transition-all">
+                                  <p className="text-sm font-bold text-slate-800 leading-snug mb-1">{rb.full_path || rb.name}</p>
+                                  {rb.name_hindi && (
+                                    <p className="text-xs font-medium text-orange-600/90 italic flex items-center gap-1.5">
+                                      <Tag className="w-3 h-3" /> {rb.name_hindi}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
 
-                            {/* Clinical Context */}
-                            <td className="p-5 text-right">
-                              <div className="flex flex-col gap-3 items-end">
-                                {(aggrs.length > 0 || amels.length > 0) && (
-                                  <div className="flex flex-wrap gap-1 justify-end">
-                                    {aggrs.map((m, i) => (
-                                      <span key={i} className="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-[9px] font-black border border-red-100 uppercase tracking-tighter">
-                                        Worse: {m}
-                                      </span>
-                                    ))}
-                                    {amels.map((m, i) => (
-                                      <span key={i} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black border border-emerald-100 uppercase tracking-tighter">
-                                        Better: {m}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {synonyms.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 justify-end opacity-70 group-hover:opacity-100 transition-opacity">
-                                    {synonyms.map((s, i) => (
-                                      <span key={i} className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                                        {s}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {!aggrs.length && !amels.length && !synonyms.length && (
-                                  <span className="text-xs text-slate-300 italic">No nuances</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
+                              {/* Clinical Context */}
+                              <td className="p-5 border-r border-slate-100 text-center">
+                                <div className="flex flex-col gap-2.5 items-center">
+                                  {(aggrs.length > 0 || amels.length > 0) && (
+                                    <div className="flex flex-wrap gap-1 justify-center">
+                                      {aggrs.map((m, i) => (
+                                        <span key={i} className="px-1.5 py-0.5 bg-red-50 text-red-600 rounded text-[9px] font-bold border border-red-100 uppercase tracking-tighter">
+                                          Worse: {m}
+                                        </span>
+                                      ))}
+                                      {amels.map((m, i) => (
+                                        <span key={i} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-bold border border-emerald-100 uppercase tracking-tighter">
+                                          Better: {m}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {synonyms.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 justify-center opacity-80">
+                                      {synonyms.map((s, i) => (
+                                        <span key={i} className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                          {s}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {!aggrs.length && !amels.length && !synonyms.length && (
+                                    <span className="text-xs text-slate-300 italic">No context</span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Remedy Indicators (Last column) */}
+                              <td className="p-5 text-right">
+                                <div className="flex flex-wrap gap-1 justify-end">
+                                  {(rb.medicines || []).slice(0, 10).map((med, mi) => (
+                                    <div 
+                                      key={mi} 
+                                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black border transition-all ${
+                                        med.grade === 3 ? "bg-rose-50 text-rose-700 border-rose-100 shadow-sm shadow-rose-100" :
+                                        med.grade === 2 ? "bg-blue-50 text-blue-700 border-blue-100 shadow-sm shadow-blue-100" :
+                                        "bg-slate-50 text-slate-600 border-slate-200"
+                                      }`}
+                                    >
+                                      {med.name}
+                                    </div>
+                                  ))}
+                                  {(rb.medicines || []).length > 10 && (
+                                    <span className="text-[9px] text-slate-400 font-black self-center ml-1">+{rb.medicines.length - 10}</span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        });
                       });
                     })()}
                   </tbody>
