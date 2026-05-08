@@ -30,10 +30,6 @@ const KEYWORD_INDEX: Record<string, string> = {
   "अकेलापन":"Mind", "उदास":"Mind", "हताश":"Mind", "विषाद":"Mind",
   "बेचैनी":"Mind", "भ्रम":"Mind", "याददाश्त":"Mind", "एकाग्रता":"Mind", "ध्यान":"Mind", "पढ़ते":"Mind",
 
-  // ── Emotion (maps to Emotion chapter which is an alias for Mind emotions) ──
-  sadness:"Mind", grief:"Mind", weeping:"Mind", despair:"Mind", melancholy:"Mind",
-  gloom:"Mind", hopeless:"Mind", dejected:"Mind", sorrow:"Mind", despondent:"Mind",
-
   // ── Head ─────────────────────────────────────────────────────────────────
   headache:"Head", head:"Head", migraine:"Head", scalp:"Head",
   forehead:"Head", temple:"Head", occiput:"Head", vertex:"Head",
@@ -51,112 +47,6 @@ const KEYWORD_INDEX: Record<string, string> = {
   ear:"Ears", ears:"Ears", tinnitus:"Ears", deafness:"Ears",
   otitis:"Ears", discharge:"Ears", cerumen:"Ears", wax:"Ears",
   "कान":"Ears", "कानों":"Ears", "कान में":"Ears",
-
-  // ── Nose ─────────────────────────────────────────────────────────────────
-  nose:"Nose", nasal:"Nose", sneezing:"Nose", rhinitis:"Nose",
-  coryza:"Nose", nostril:"Nose", discharge:"Nose", bleeding:"Nose",
-  polyp:"Nose",
-  "नाक":"Nose", "नाक से":"Nose", "छींक":"Nose", "जुकाम":"Nose",
-
-  // ── Face ─────────────────────────────────────────────────────────────────
-  face:"Face",
-  "चेहरा":"Face", "चेहरे":"Face", "गाल":"Face",
-
-  // ── Mouth ─────────────────────────────────────────────────────────────────
-  mouth:"Mouth", tongue:"Mouth", lips:"Mouth", saliva:"Mouth", aphthae:"Mouth",
-  "मुँह":"Mouth", "जीभ":"Mouth",
-
-  // ── Teeth ─────────────────────────────────────────────────────────────────
-  teeth:"Teeth", tooth:"Teeth", gum:"Teeth", dental:"Teeth", caries:"Teeth",
-  "दाँत":"Teeth", "मसूड़":"Teeth",
-
-  // ── Throat ────────────────────────────────────────────────────────────────
-  throat:"Throat", tonsil:"Throat", swallow:"Throat", pharynx:"Throat", hoarse:"Throat",
-  "गला":"Throat", "गले":"Throat", "टॉन्सिल":"Throat",
-
-  // ── Stomach ───────────────────────────────────────────────────────────────
-  stomach:"Stomach", nausea:"Stomach", vomit:"Stomach", gastric:"Stomach",
-  appetite:"Stomach", hunger:"Stomach", eructation:"Stomach", heartburn:"Stomach",
-  thirst:"Stomach", indigestion:"Stomach", pain:"Stomach",
-  "भूख":"Stomach", "प्यास":"Stomach", "मतली":"Stomach", "उल्टी":"Stomach",
-  "पेट":"Stomach",
-
-  // ── Abdomen ───────────────────────────────────────────────────────────────
-  abdomen:"Abdomen", abdominal:"Abdomen", belly:"Abdomen",
-  distension:"Abdomen", flatulence:"Abdomen", bloat:"Abdomen",
-  "पेड़ू":"Abdomen", "गैस":"Abdomen", "पसली":"Abdomen", "पसलियों":"Abdomen",
-
-  // ── Rectum ────────────────────────────────────────────────────────────────
-  stool:"Rectum", constipat:"Rectum", diarrhea:"Rectum", rectal:"Rectum",
-  hemorrhoid:"Rectum", piles:"Rectum", dysentery:"Rectum",
-  "कब्ज":"Rectum", "दस्त":"Rectum", "बवासीर":"Rectum", "मल":"Rectum",
-
-  // ── Urinary ───────────────────────────────────────────────────────────────
-  urine:"Urinary", urinary:"Urinary", bladder:"Urinary", dysuria:"Urinary",
-  "पेशाब":"Urinary", "मूत्र":"Urinary",
-
-  // ── Kidney ────────────────────────────────────────────────────────────────
-  kidney:"Kidney",
-  "गुर्दा":"Kidney", "गुर्दे":"Kidney",
-
-  // ── Chest ─────────────────────────────────────────────────────────────────
-  chest:"Chest", lung:"Chest", breast:"Chest",
-  "छाती":"Chest", "फेफड़ा":"Chest",
-
-  // ── Heart ─────────────────────────────────────────────────────────────────
-  heart:"Heart", palpitat:"Heart", cardiac:"Heart",
-  "हृदय":"Heart", "दिल":"Heart", "धड़कन":"Heart",
-
-  // ── Respiratory ───────────────────────────────────────────────────────────
-  breath:"Respiratory", breathe:"Respiratory", asthma:"Respiratory",
-  wheez:"Respiratory", dyspnea:"Respiratory",
-  "साँस":"Respiratory", "दमा":"Respiratory",
-
-  // ── Cough ─────────────────────────────────────────────────────────────────
-  cough:"Cough", "खाँसी":"Cough", "खांसी":"Cough",
-
-  // ── Back ──────────────────────────────────────────────────────────────────
-  back:"Back", spine:"Back", sciatica:"Back",
-  "पीठ":"Back",
-
-  // ── Lumbosacral ───────────────────────────────────────────────────────────
-  lumbar:"Lumbosacral", sacrum:"Lumbosacral",
-  "कमर":"Lumbosacral", "कमरदर्द":"Lumbosacral",
-
-  // ── Cervical ──────────────────────────────────────────────────────────────
-  cervical:"Cervical",
-  "गर्दन":"Cervical",
-
-  // ── Extremities ───────────────────────────────────────────────────────────
-  leg:"Extremities", arm:"Extremities", joint:"Extremities", knee:"Extremities",
-  ankle:"Extremities", hand:"Extremities", foot:"Extremities", feet:"Extremities",
-  elbow:"Extremities", shoulder:"Extremities", wrist:"Extremities", hip:"Extremities",
-  rheumatism:"Extremities", arthritis:"Extremities",
-  "हाथ":"Extremities", "पैर":"Extremities", "जोड़":"Extremities", "जोड़ों":"Extremities",
-
-  // ── Skin ──────────────────────────────────────────────────────────────────
-  skin:"Skin", rash:"Skin", eruption:"Skin", itch:"Skin", eczema:"Skin",
-  urticaria:"Skin", psoriasis:"Skin", acne:"Skin",
-  "त्वचा":"Skin", "खुजली":"Skin", "दाद":"Skin", "दाने":"Skin",
-
-  // ── Fever ─────────────────────────────────────────────────────────────────
-  fever:"Fever", chill:"Fever", ague:"Fever",
-  "बुखार":"Fever", "ताप":"Fever",
-
-  // ── Sleep ─────────────────────────────────────────────────────────────────
-  sleep:"Sleep", insomnia:"Sleep",
-  "नींद":"Sleep", "अनिद्रा":"Sleep",
-
-  // ── Nervous ───────────────────────────────────────────────────────────────
-  nerve:"Nervous", neural:"Nervous", neuralgia:"Nervous",
-  paralysis:"Nervous", convulsion:"Nervous", epilepsy:"Nervous",
-  trembling:"Nervous", numbness:"Nervous", tingling:"Nervous",
-  "नस":"Nervous", "लकवा":"Nervous", "मिर्गी":"Nervous", "कंपन":"Nervous",
-
-  // ── Generalities ──────────────────────────────────────────────────────────
-  weakness:"Generalities", fatigue:"Generalities",
-  perspiration:"Generalities", sweat:"Generalities", debility:"Generalities",
-  "कमजोरी":"Generalities", "थकान":"Generalities", "पसीना":"Generalities", "दर्द":"Generalities", "पीड़ा":"Generalities",
 } as Record<string, string>;
 
 // Exact phrase index to override single-word tokens
@@ -165,7 +55,6 @@ const PHRASE_INDEX: Record<string, string> = {
   "सिर दर्द":    "Head",
   "आँख में":     "Eyes",
   "कान में":     "Ears",
-  "नाक से":      "Nose",
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -253,7 +142,15 @@ export default function RubricsPage() {
   useEffect(() => {
     fetch(`${API_BASE}/doctor/rubrics/chapters/`, { credentials: "include" })
       .then(r => r.json())
-      .then(d => { if (d.success) setChapters(d.chapters || []); })
+      .then(d => { 
+        if (d.success) {
+          const allowed = ["Mind", "Head", "Eyes", "Ears"];
+          const filtered = (d.chapters || []).filter((c: any) => 
+            allowed.some(a => c.name.toLowerCase().includes(a.toLowerCase()))
+          );
+          setChapters(filtered); 
+        }
+      })
       .catch(() => setError("Failed to load chapters"))
       .finally(() => setChapterLoading(false));
       
