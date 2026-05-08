@@ -1133,6 +1133,7 @@ export default function RubricsPage() {
                         </table>
                       </div>
                     </div>
+                  </>
                   );
                 })()}
               </div>

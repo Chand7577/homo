@@ -8720,7 +8720,12 @@ def doctor_rubric_repertorize(request):
                 symptoms_breakdown.append({
                     'symptom': sym_str,
                     'rubric_count': 1,
-                    'rubrics': [best_rubric_data],
+                    'rubrics': [{
+                        **best_rubric_data['rubric'],
+                        'score': round(best_rubric_data['score'], 2),
+                        'matched_symptoms': best_rubric_data['matched_symptoms'],
+                        'medicines': best_rubric_data['medicines']
+                    }],
                     'score': best_score,
                     'exact_match': 'exact_match' in best_rubric_data['rubric']['matched_fields']
                 })
