@@ -7,7 +7,7 @@ import {
   ChevronDown, Tag, Loader2, BarChart3, Trophy, AlertCircle,
   CheckCircle2, ArrowLeft, Zap, Filter, Star, Activity,
   Hash, Info, Table2, FlaskConical, Microscope, Mic, MicOff,
-  PlusCircle, Layers
+  PlusCircle, Layers, TrendingUp
 } from "lucide-react";
 import RubricModal from "../../components/RubricModal";
 
