@@ -4648,10 +4648,12 @@ def intelligent_rubric_search(request):
             'those', 'doctor', 'please', 'help', 'sir', 'madam', 'suffering',
             'since', 'days', 'months', 'years', 'feeling', 'feel', 'when', 'what',
             'where', 'why', 'how', 'who', 'can', 'could', 'would', 'should',
-            'will', 'very', 'much', 'too', 'lot', 'getting', 'got'
+            'will', 'very', 'much', 'too', 'lot', 'getting', 'got',
+            'में', 'का', 'की', 'से', 'को', 'पर', 'और', 'है', 'हैं', 'था', 'थी', 'थे',
+            'वाला', 'वाली', 'वाले', 'के', 'लिए', 'करता', 'करती', 'करते'
         }
-        tokens = re.findall(r'\b\w+\b', query.lower())
-        search_words = [w for w in tokens if len(w) > 2 and w not in filler_words]
+        tokens = [t for t in re.split(r'[\s,।|.:;!\-?–—]+', query.lower()) if t]
+        search_words = [w for w in tokens if len(w) >= 2 and w not in filler_words]
         if not search_words:
             search_words = tokens if tokens else [query.lower()]
 
@@ -8348,9 +8350,23 @@ def doctor_rubric_repertorize(request):
             'दुख':          ['sad', 'grief', 'sorrow', 'distress', 'misery'],
             'निराश':        ['hopeless', 'hopelessness', 'despair', 'despondency', 'discouraged'],
             'निराशा':       ['hopeless', 'despair', 'despondency', 'hopelessness'],
+            'टॉन्सिल':      ['tonsil', 'tonsils', 'tonsillitis'],
+            'टॉन्सिल्स':    ['tonsil', 'tonsils', 'tonsillitis'],
+            'संदेह':        ['suspicious', 'doubt', 'suspicion'],
+            'शक':          ['suspicious', 'doubt', 'suspicion'],
+            'संकोच':        ['timidity', 'hesitation', 'bashful'],
+            'भ्रम':         ['delusion', 'illusion', 'hallucination'],
+            'याददाश्त':     ['memory', 'forgetful'],
+            'पागलपन':      ['insanity', 'mania'],
+            'बेचैनी':        ['restlessness', 'anxiety', 'restless'],
+            'भय':          ['fear', 'fright'],
+            'क्रोध':         ['anger', 'irritability'],
+            'चिंता':         ['anxiety', 'worry', 'care'],
             'रोना':         ['weeping', 'crying', 'tears'],
             'रोता':         ['weeping', 'crying', 'tears'],
             'रोती':         ['weeping', 'crying', 'tears'],
+            'रोने':         ['weeping', 'crying', 'tears'],
+            'बाद':          ['after'],
             'अकेलापन':      ['loneliness', 'solitude', 'alone', 'forsaken'],
             'एकाग्रता':     ['concentration', 'focus'],
             'पढ़ते':        ['reading', 'studying'],
@@ -8615,7 +8631,7 @@ def doctor_rubric_repertorize(request):
                 )
 
             # Fetch candidates
-            candidate_ids = set(base_qs.filter(q).values_list('id', flat=True)[:500])
+            candidate_ids = set(base_qs.filter(q).values_list('id', flat=True)[:3000])
             if not candidate_ids:
                 symptoms_breakdown.append({
                     'symptom': sym_str,
@@ -8660,9 +8676,9 @@ def doctor_rubric_repertorize(request):
                     matched_fields.append('substring_match')
 
                 # 2. Token matching
-                has_name_match = False
-                has_modality_match = False
-                has_synonym_match = False
+                name_matched_tokens = set()
+                modality_matched_tokens = set()
+                synonym_matched_tokens = set()
 
                 for term in all_search_tokens:
                     term_lower = term.lower()
@@ -8672,30 +8688,30 @@ def doctor_rubric_repertorize(request):
                     # Name match
                     for t in terms_to_check:
                         if t in rubric_name_lower or t in rubric_hindi_lower or t in rubric.description.lower() or t in (rubric.description_hindi or '').lower():
-                            has_name_match = True
+                            name_matched_tokens.add(term_lower)
                             break
 
                     # Modality match
                     for t in terms_to_check:
                         if any(t in m for m in modality_texts) or any(t in m for m in modality_hindi_texts):
-                            has_modality_match = True
+                            modality_matched_tokens.add(term_lower)
                             break
 
                     # Synonym match
                     for t in terms_to_check:
                         if any(t in s for s in synonym_texts) or any(t in s for s in synonym_hindi_texts):
-                            has_synonym_match = True
+                            synonym_matched_tokens.add(term_lower)
                             break
 
                 # Apply main scores cumulatively
-                if has_name_match:
-                    score += 50
+                if name_matched_tokens:
+                    score += 50 * len(name_matched_tokens)
                     matched_fields.append('name')
-                if has_modality_match:
-                    score += 30
+                if modality_matched_tokens:
+                    score += 30 * len(modality_matched_tokens)
                     matched_fields.append('modality')
-                if has_synonym_match:
-                    score += 20
+                if synonym_matched_tokens:
+                    score += 20 * len(synonym_matched_tokens)
                     matched_fields.append('synonym')
                 
                 if not matched_fields:

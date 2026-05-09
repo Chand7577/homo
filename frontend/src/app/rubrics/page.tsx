@@ -29,6 +29,7 @@ const KEYWORD_INDEX: Record<string, string> = {
   "दुखी":"Mind", "निराश":"Mind", "रोना":"Mind", "रोता":"Mind", "रोती":"Mind",
   "अकेलापन":"Mind", "उदास":"Mind", "हताश":"Mind", "विषाद":"Mind",
   "बेचैनी":"Mind", "भ्रम":"Mind", "याददाश्त":"Mind", "एकाग्रता":"Mind", "ध्यान":"Mind", "पढ़ते":"Mind",
+  "संदेह":"Mind", "शक":"Mind", "संकोच":"Mind",
 
   // ── Head ─────────────────────────────────────────────────────────────────
   headache:"Head", head:"Head", migraine:"Head", scalp:"Head",
@@ -329,8 +330,8 @@ export default function RubricsPage() {
           }
 
           // Tokenize symptom: split on spaces, commas, pipe, Hindi danda, periods, etc.
-          const stopWords = new Set(["में", "का", "की", "से", "को", "पर", "और", "है", "हैं", "था", "थी", "थे", "वाला", "वाली", "वाले"]);
-          const tokens = lowerSym.split(/[\s,।|.:;!?]+/).filter(t => t.length >= 3 && !stopWords.has(t));
+          const stopWords = new Set(["में", "का", "की", "से", "को", "पर", "और", "है", "हैं", "था", "थी", "थे", "वाला", "वाली", "वाले", "के", "लिए", "करता", "करती", "करते"]);
+          const tokens = lowerSym.split(/[\s,।|.:;!\-?–—]+/).filter(t => t.length >= 2 && !stopWords.has(t));
           
           // Score each token against the keyword index
           const scores: Record<string, number> = {};
