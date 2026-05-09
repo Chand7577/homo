@@ -160,23 +160,44 @@ export default function RubricsPage() {
       if (SpeechRecognition) {
         recognitionRef.current = new SpeechRecognition();
         recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = false;
+        recognitionRef.current.interimResults = true;
         
         recognitionRef.current.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
+          let interimTranscript = "";
+          let finalTranscript = "";
+
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+
+          const transcript = finalTranscript || interimTranscript;
+
           if (listeningChapterId !== null) {
             // Chapter-specific dictation
             setChapterInputs(prev => ({
               ...prev,
-              [listeningChapterId]: (prev[listeningChapterId] || "") + " " + transcript
+              [listeningChapterId]: (prev[listeningChapterId] || "") + (event.results[0].isFinal ? " " + transcript : transcript)
             }));
           } else {
-            // Global dictation — append to global input
-            setGlobalInput(prev => (prev ? prev + " " + transcript : transcript).trim());
+            // Global dictation
+            if (event.results[0].isFinal) {
+              setGlobalInput(prev => (prev ? prev + " " + transcript : transcript).trim());
+            } else {
+              // For interim, we can temporarily show it or just wait
+              // For now, let's only update on final to avoid jitter, 
+              // but we can show interim state if we had an interim state variable
+            }
           }
-          setIsListening(false);
-          setIsGlobalListening(false);
-          setListeningChapterId(null);
+
+          if (event.results[0].isFinal) {
+            setIsListening(false);
+            setIsGlobalListening(false);
+            setListeningChapterId(null);
+          }
         };
         
         recognitionRef.current.onerror = () => { setIsListening(false); setIsGlobalListening(false); setListeningChapterId(null); };
@@ -950,7 +971,6 @@ export default function RubricsPage() {
                           </div>
                         </div>
                       </div>
-
                       <div className="flex flex-col gap-5 max-w-3xl mx-auto pb-12">
                         {sortedMeds.map((med, i) => {
                           const pct = Math.round((med.symptomsCovered / totalSymptomsAnalyzed) * 100);
@@ -981,47 +1001,31 @@ export default function RubricsPage() {
 
                                 {/* Stats & Bars */}
                                 <div className="flex-1 w-full space-y-4">
-                                  <div className="flex justify-between items-center px-1">
+                                  <div className="flex justify-between items-end px-1">
                                     <div className="flex items-center gap-2">
-                                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-tighter border border-slate-200">
-                                        Coverage: {med.symptomsCovered}/{totalSymptomsAnalyzed} symptoms
-                                      </span>
-                                    </div>
-                                    <div className={`px-4 py-1.5 rounded-xl text-sm font-black border-2 transition-all ${
-                                      pct >= 70 ? 'bg-blue-950 text-white border-blue-900' :
-                                      pct >= 50 ? 'bg-blue-800 text-white border-blue-700' :
-                                      'bg-slate-100 text-slate-600 border-slate-200'
-                                    }`}>
-                                      {pct}% Match
+                                      <span className="text-sm font-black text-indigo-600 tracking-tight">{pct}% Match</span>
                                     </div>
                                   </div>
-
-                                  <div className="relative h-6 bg-slate-100 rounded-full border border-slate-200 shadow-inner overflow-hidden p-1">
+                                  <div className="relative h-5 bg-slate-100 rounded-full border border-slate-200 shadow-inner overflow-hidden">
                                     <div
                                       style={{ width: `${pct}%` }}
-                                      className={`h-full rounded-full transition-all duration-1000 ease-out shadow-lg relative ${
-                                        pct >= 70 ? 'bg-gradient-to-r from-blue-700 to-blue-950' :
-                                        pct >= 50 ? 'bg-gradient-to-r from-blue-500 to-blue-800' :
-                                        'bg-gradient-to-r from-indigo-400 to-indigo-600'
+                                      className={`h-full rounded-full transition-all duration-1000 ease-out shadow-md relative ${
+                                        pct >= 50 ? 'bg-blue-600 border-r border-blue-700' :
+                                        'bg-blue-400'
                                       }`}
                                     >
-                                      <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:1rem_1rem] animate-[move-stripe_2s_linear_infinite]"></div>
+                                      <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:1rem_1rem]"></div>
                                     </div>
                                     
                                     {/* Critical Benchmarks */}
-                                    <div className="absolute top-0 bottom-0 left-[50%] w-0.5 bg-blue-500/20"></div>
-                                    <div className="absolute top-0 bottom-0 left-[70%] w-0.5 bg-blue-700/30"></div>
+                                    <div className="absolute top-0 bottom-0 left-[50%] w-0.5 bg-blue-700/30"></div>
                                   </div>
                                   
                                   <div className="flex justify-between px-2">
                                     <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Base</span>
                                     <div className="flex items-center gap-1.5">
-                                       <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                                       <span className="text-[9px] font-black text-blue-800 uppercase tracking-widest">50% Marker</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-950"></div>
-                                       <span className="text-[9px] font-black text-blue-950 uppercase tracking-widest">70% Critical</span>
+                                       <span className="text-[9px] font-black text-blue-950 uppercase tracking-widest">50%</span>
                                     </div>
                                     <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Full</span>
                                   </div>

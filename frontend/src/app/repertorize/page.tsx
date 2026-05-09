@@ -798,14 +798,12 @@ const DoctorRepertorize = () => {
 
                         {/* Coverage Timeline */}
                         <div className="relative mt-2 mb-6">
-                          <div className="w-full bg-gray-100 rounded-full h-3 border border-gray-200 overflow-hidden shadow-inner">
+                          <div className="w-full bg-gray-100 rounded-full h-2.5 border border-gray-200 overflow-hidden shadow-inner">
                             <div
                               className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${
-                                medicine.coverage_percentage >= 80
-                                  ? "bg-gradient-to-r from-emerald-400 to-emerald-600"
-                                  : medicine.coverage_percentage >= 50
-                                    ? "bg-gradient-to-r from-amber-400 to-amber-600"
-                                    : "bg-gradient-to-r from-rose-400 to-rose-600"
+                                medicine.coverage_percentage >= 50
+                                  ? "bg-blue-600"
+                                  : "bg-blue-400"
                               }`}
                               style={{
                                 width: `${medicine.coverage_percentage}%`,
