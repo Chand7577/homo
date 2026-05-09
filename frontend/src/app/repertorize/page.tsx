@@ -21,9 +21,10 @@ import {
   BarChart3,
   CheckCircle,
   FileText,
-  Download,
   Save,
   Loader2,
+  Activity,
+  Download,
 } from "lucide-react";
 
 import { API_BASE } from "@/config";
@@ -447,7 +448,7 @@ const DoctorRepertorize = () => {
                 {/* Search Results */}
                 {searchResults.length > 0 && (
                   <div className="mt-4 max-h-80 overflow-y-auto space-y-2">
-                    {searchResults.map((rubric) => (
+                    {searchResults.map((rubric, index) => (
                       <button
                         key={rubric.id}
                         onClick={() => addRubric(rubric)}
@@ -456,7 +457,7 @@ const DoctorRepertorize = () => {
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-gray-900 group-hover:text-gray-900 truncate">
-                              {rubric.name}
+                              {index + 1}. {rubric.name}
                             </p>
                             {rubric.description && (
                               <p className="text-xs text-gray-600 mt-1 line-clamp-1">
@@ -731,9 +732,22 @@ const DoctorRepertorize = () => {
                     analyzed
                   </p>
                 </div>
-                <button className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors">
-                  <Download className="w-5 h-5 text-gray-600" />
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      localStorage.setItem("comparative_rubrics", JSON.stringify(selectedRubrics));
+                      localStorage.setItem("comparative_result", JSON.stringify(repertorizationResult));
+                      window.location.href = "/comparative";
+                    }}
+                    className="px-4 py-2 bg-blue-50 text-blue-700 font-semibold rounded-xl hover:bg-blue-100 transition-colors flex items-center gap-2"
+                  >
+                    <Activity className="w-5 h-5" />
+                    Comparative Analysis
+                  </button>
+                  <button className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors">
+                    <Download className="w-5 h-5 text-gray-600" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -771,7 +785,7 @@ const DoctorRepertorize = () => {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4 mb-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-3">
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Score</p>
                             <p className="text-lg font-bold text-gray-900">
@@ -786,7 +800,7 @@ const DoctorRepertorize = () => {
                               {medicine.rubric_count}
                             </p>
                           </div>
-                          <div>
+                          <div className="col-span-2 sm:col-span-1">
                             <p className="text-xs text-gray-500 mb-1">
                               Coverage
                             </p>
@@ -797,7 +811,7 @@ const DoctorRepertorize = () => {
                         </div>
 
                         {/* Coverage Timeline */}
-                        <div className="relative mt-2 mb-6">
+                        <div className="relative mt-2 mb-10">
                           <div className="w-full bg-gray-100 rounded-full h-2.5 border border-gray-200 overflow-hidden shadow-inner">
                             <div
                               className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${

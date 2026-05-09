@@ -4733,8 +4733,16 @@ def intelligent_rubric_search(request):
                         score += 50
                     scored.append((score, rubric))
 
-                scored.sort(key=lambda x: -x[0])
-                rubrics_list_raw = [r for _, r in scored[:7]]
+                # Sort by score descending, then by name length
+                scored.sort(key=lambda x: (-x[0], len(x[1].name or '')))
+                
+                # Check for exact path match (sub_part == name and main_part == parent)
+                exact_matches = [r for s, r in scored if sub_part.lower() == (r.name or '').lower() and main_part.lower() == (r.parent.name if r.parent else '').lower()]
+                if exact_matches:
+                    # Keep exact matches at the top, followed by others up to 7
+                    rubrics_list_raw = exact_matches + [r for _, r in scored if r not in exact_matches][:7 - len(exact_matches)]
+                else:
+                    rubrics_list_raw = [r for _, r in scored[:7]]
 
                 # Build response
                 return _build_rubric_response(rubrics_list_raw, identified_chapter=main_part)
@@ -4785,16 +4793,12 @@ def intelligent_rubric_search(request):
                     word_q = (
                         Q(name__icontains=word) |
                         Q(name_hindi__icontains=word) |
-                        Q(description__icontains=word) |
                         Q(synonyms__synonym__icontains=word)
                     )
                     symptom_q = word_q if not symptom_q else symptom_q & word_q
 
-                # Apply symptom filter; fall back to chapter-only if nothing matches
-                chapter_and_symptom = base_qs.filter(symptom_q)
-                if chapter_and_symptom.exists():
-                    base_qs = chapter_and_symptom
-                # else: base_qs stays as chapter-only (all rubrics in that chapter)
+                # Apply symptom filter; strictly return matches
+                base_qs = base_qs.filter(symptom_q)
         else:
             # No body-part detected: broad search across all chapters
             # Each word must match in name, synonym, or description (no modality JOIN)
@@ -4803,8 +4807,6 @@ def intelligent_rubric_search(request):
                 word_q = (
                     Q(name__icontains=word) |
                     Q(name_hindi__icontains=word) |
-                    Q(description__icontains=word) |
-                    Q(description_hindi__icontains=word) |
                     Q(synonyms__synonym__icontains=word)
                 )
                 combined_q = word_q if not combined_q else combined_q & word_q
@@ -4817,21 +4819,35 @@ def intelligent_rubric_search(request):
         # 6. PYTHON-SIDE SCORING
         #    Score each rubric based on how well it matches all words
         # ─────────────────────────────────────────────────────────────────────
+        def clean_for_match(text):
+            if not text: return ""
+            import re
+            # Remove punctuation, keep Devanagari, lower case, normalize spaces
+            t = re.sub(r'[^\w\s\u0900-\u097F]', ' ', str(text).lower())
+            return " ".join(t.split())
+
         def score_rubric(rubric, words, chapter, full_query):
             score = 0
             rname = (rubric.name or '').lower()
             rname_h = (rubric.name_hindi or '').lower()
-            rdesc = (rubric.description or '').lower()
-            rdesc_h = (rubric.description_hindi or '').lower()
             pname = (rubric.parent.name if rubric.parent else '').lower()
             synonyms_text = ' '.join(s.synonym.lower() for s in rubric.synonyms.all())
             modalities_text = ' '.join(m.name.lower() for m in rubric.modalities.all())
 
-            fq = full_query.lower()
+            # Cleaned versions for exact matching
+            c_fq = clean_for_match(full_query)
+            c_rname = clean_for_match(rubric.name)
+            c_rname_h = clean_for_match(rubric.name_hindi)
+            c_sw_joined = clean_for_match(" ".join(symptom_words))
 
-            # Full query exact match in rubric name — highest possible score
-            if fq in rname or fq in rname_h:
-                score += 200
+            # 1. Full query exact match (cleaned)
+            if c_fq and (c_fq == c_rname or c_fq == c_rname_h):
+                score += 2000
+
+            # 2. Chapter-aware exact match (cleaned)
+            if chapter and chapter.lower() == pname.lower():
+                if c_sw_joined and (c_sw_joined == c_rname or c_sw_joined == c_rname_h):
+                    score += 2000
 
             for word in words:
                 # Name match — very high
@@ -4843,13 +4859,13 @@ def intelligent_rubric_search(request):
                 # Synonym match — medium
                 if word in synonyms_text:
                     score += 20
-                # Description match — low
-                if word in rdesc or word in rdesc_h:
-                    score += 10
 
             # Correct chapter bonus
             if chapter and chapter.lower() in pname:
                 score += 50
+
+            # Penalty for longer names to prioritize the more "specific" (shortest) match
+            score -= len(rname) * 0.01
 
             return score
 
@@ -4858,8 +4874,12 @@ def intelligent_rubric_search(request):
             s = score_rubric(rubric, search_words, detected_chapter, query)
             scored_rubrics.append((s, rubric))
 
-        # Sort by score descending, then alphabetically for stable ordering
-        scored_rubrics.sort(key=lambda x: (-x[0], x[1].name or ''))
+        # Sort by score descending, then by name length (shorter is better)
+        scored_rubrics.sort(key=lambda x: (-x[0], len(x[1].name or '')))
+        
+        # If we have an exact match (score >= 2000), we could return just that,
+        # but the user requested numbered options (1, 2, 3) for symptom searches.
+        # So we return the top 7, with the exact match at the top.
         top_rubrics = [r for _, r in scored_rubrics[:7]]
 
         return _build_rubric_response(top_rubrics, identified_chapter=detected_chapter)
@@ -8640,8 +8660,6 @@ def doctor_rubric_repertorize(request):
                 q |= (
                     Q(name__icontains=tok) |
                     Q(name_hindi__icontains=tok) |
-                    Q(description__icontains=tok) |
-                    Q(description_hindi__icontains=tok) |
                     Q(synonyms__synonym__icontains=tok) |
                     Q(synonyms__synonym_hindi__icontains=tok) |
                     Q(modalities__name__icontains=tok) |
@@ -8687,7 +8705,7 @@ def doctor_rubric_repertorize(request):
                     exact_match = True
                 
                 if exact_match:
-                    score += 10
+                    score += 1000
                     matched_fields.append('exact_match')
                 elif sym_str.lower() in rubric_name_lower or sym_str.lower() in rubric_hindi_lower:
                     score += 5 # Substring match bonus
@@ -8705,7 +8723,7 @@ def doctor_rubric_repertorize(request):
 
                     # Name match
                     for t in terms_to_check:
-                        if t in rubric_name_lower or t in rubric_hindi_lower or t in rubric.description.lower() or t in (rubric.description_hindi or '').lower():
+                        if t in rubric_name_lower or t in rubric_hindi_lower:
                             name_matched_tokens.add(term_lower)
                             break
 
@@ -8781,9 +8799,11 @@ def doctor_rubric_repertorize(request):
                     })
 
             if scored_candidates:
-                # Sort by score and take top 7
-                scored_candidates.sort(key=lambda x: x['score'], reverse=True)
-                top_for_sym = scored_candidates[:7]
+                # Sort by score descending, then by name length (shorter is more specific)
+                scored_candidates.sort(key=lambda x: (-x['score'], len(x['rubric']['name'])))
+                
+                # Always return ONLY ONE specific rubric per symptom
+                top_for_sym = [scored_candidates[0]]
 
                 # Only include rubrics that have at least some clinical data
                 rubric_rows = []

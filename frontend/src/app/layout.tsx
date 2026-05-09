@@ -11,7 +11,7 @@ import PatientSidebar from "@/components/PatientSidebar";
 import LoadingProvider from "@/components/LoadingProvider";
 import AI from "@/components/AI";
 import RoleModal from "@/components/RoleModal";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,9 +29,12 @@ import { API_BASE } from "@/config";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [role, setRole] = useState<UserRole>(null);
   const [showModal, setShowModal] = useState<boolean | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const isFullPage = pathname?.startsWith("/comparative") || pathname?.startsWith("/rubrics");
 
   // Check authentication on mount
   useEffect(() => {
@@ -174,9 +177,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <RoleModal onSelect={handleRoleSelect} />
           ) : (
             <div className="flex min-h-screen bg-gray-50">
-              {renderSidebar()}
+              {!isFullPage && renderSidebar()}
 
-              <main className="flex-1 md:ml-64 pb-16 md:pb-0 overflow-y-auto transition-all duration-300">
+              <main className={`flex-1 ${!isFullPage ? "md:ml-64" : ""} pb-16 md:pb-0 overflow-y-auto transition-all duration-300`}>
                 <AI />
                 {children}
               </main>
