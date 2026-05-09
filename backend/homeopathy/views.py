@@ -4629,6 +4629,14 @@ def intelligent_rubric_search(request):
                 'message': 'Query too short. Please enter at least 2 characters.'
             })
 
+        # Expand common compound symptoms to help routing
+        query = query.lower()
+        query = query.replace('headache', 'head pain')
+        query = query.replace('stomachache', 'stomach pain')
+        query = query.replace('backache', 'back pain')
+        query = query.replace('toothache', 'teeth pain')
+        query = query.replace('earache', 'ear pain')
+
         # ─────────────────────────────────────────────────────────────────────
         # 1. TOKENISATION — strip filler words
         # ─────────────────────────────────────────────────────────────────────
@@ -4727,7 +4735,7 @@ def intelligent_rubric_search(request):
                 rubrics_list_raw = [r for _, r in scored[:7]]
 
                 # Build response
-                return _build_rubric_response(rubrics_list_raw)
+                return _build_rubric_response(rubrics_list_raw, identified_chapter=main_part)
 
         # ─────────────────────────────────────────────────────────────────────
         # 4. DETECT BODY PART IN QUERY
@@ -4763,6 +4771,10 @@ def intelligent_rubric_search(request):
                 Q(parent__name__icontains=detected_chapter)
             )
             base_qs = base_qs.filter(chapter_filter)
+
+            if not has_symptom_words and len(search_words) > 0:
+                symptom_words = search_words
+                has_symptom_words = True
 
             if has_symptom_words:
                 # Also filter by remaining symptom keywords (in name or synonym)
@@ -4848,7 +4860,7 @@ def intelligent_rubric_search(request):
         scored_rubrics.sort(key=lambda x: (-x[0], x[1].name or ''))
         top_rubrics = [r for _, r in scored_rubrics[:7]]
 
-        return _build_rubric_response(top_rubrics)
+        return _build_rubric_response(top_rubrics, identified_chapter=detected_chapter)
 
     except Exception as e:
         logger.error(f"Error searching rubrics: {str(e)}")
@@ -4857,7 +4869,7 @@ def intelligent_rubric_search(request):
         return JsonResponse({'error': f'Search failed: {str(e)}'}, status=500)
 
 
-def _build_rubric_response(rubrics):
+def _build_rubric_response(rubrics, identified_chapter=None):
     """Helper: convert a list of Rubric objects to the standard JSON response."""
     rubric_list = []
     for rubric in rubrics:
@@ -4886,6 +4898,11 @@ def _build_rubric_response(rubrics):
         except Exception:
             medicines_list = []
 
+        category = rubric.parent.name if rubric.parent and rubric.level == 1 else rubric.name if rubric.level == 0 else None
+        
+        if not identified_chapter and category:
+            identified_chapter = category
+            
         rubric_list.append({
             'id': rubric.id,
             'name': rubric.name,
@@ -4901,14 +4918,21 @@ def _build_rubric_response(rubrics):
                 'ameliorations': ameliorations,
             },
             'medicines': medicines_list,
-            'category': (rubric.parent.name if rubric.parent and rubric.level == 1
-                         else rubric.name if rubric.level == 0 else None),
+            'category': category,
         })
+
+    # Calculate leaderboard using perform_simple_addition
+    rubric_ids = [r.id for r in rubrics]
+    leaderboard = []
+    if rubric_ids:
+        leaderboard = perform_simple_addition(rubric_ids)[:10]
 
     return JsonResponse({
         'success': True,
+        'identified_chapter': identified_chapter,
         'rubrics': rubric_list,
-        'total': len(rubric_list)
+        'total': len(rubric_list),
+        'leaderboard': leaderboard
     })
 
 
@@ -5218,6 +5242,7 @@ def perform_simple_addition(rubric_ids):
         if med_id not in medicine_scores:
             medicine_scores[med_id] = {
                 'medicine_id': med_id,
+                'medicine_name': grade.medicine.name,
                 'score': 0,
                 'rubrics_covered': 0,
                 'rubric_grades': {},
@@ -8535,6 +8560,9 @@ def doctor_rubric_repertorize(request):
             if not sym_str:
                 continue
 
+            # Clean and normalize the symptom string for exact match comparison
+            sym_normalized = " ".join([w.lower() for w in re.sub(r'[^\w\s\u0900-\u097F]', ' ', sym_str).split() if w.lower() not in stop_words])
+
             # Tokens for this specific symptom
             tokens = sentence_tokens.get(sym_str, [])
             if not tokens:
@@ -8689,6 +8717,13 @@ def doctor_rubric_repertorize(request):
                             'grade_label': mg.get_grade_display(),
                         })
 
+                    # Use prefetched relations (no extra DB hit)
+                    all_mods = list(rubric.modalities.all())
+                    all_syns = list(rubric.synonyms.all())
+                    aggravations  = [{'name': m.name, 'name_hindi': m.name_hindi} for m in all_mods if m.modality_type == 'aggravation']
+                    ameliorations = [{'name': m.name, 'name_hindi': m.name_hindi} for m in all_mods if m.modality_type == 'amelioration']
+                    synonyms_list = [s.synonym for s in all_syns if s.synonym]
+
                     scored_candidates.append({
                         'rubric': {
                             'id': rubric.id,
@@ -8701,10 +8736,10 @@ def doctor_rubric_repertorize(request):
                             'medicine_count': len(medicines),
                             'matched_fields': matched_fields,
                             'modalities': {
-                                'aggravations': [{'name': m.name, 'name_hindi': m.name_hindi} for m in rubric.modalities.filter(modality_type='aggravation')],
-                                'ameliorations': [{'name': m.name, 'name_hindi': m.name_hindi} for m in rubric.modalities.filter(modality_type='amelioration')],
+                                'aggravations': aggravations,
+                                'ameliorations': ameliorations,
                             },
-                            'synonyms': [{'synonym': s.synonym, 'synonym_hindi': s.synonym_hindi} for s in rubric.synonyms.all()],
+                            'synonyms': synonyms_list,
                         },
                         'score': score,
                         'matched_symptoms': list(all_search_tokens),
@@ -8716,31 +8751,35 @@ def doctor_rubric_repertorize(request):
                 scored_candidates.sort(key=lambda x: x['score'], reverse=True)
                 top_for_sym = scored_candidates[:7]
 
-                symptoms_breakdown.append({
-                    'symptom': sym_str,
-                    'rubric_count': len(top_for_sym),
-                    'rubrics': [
-                        {
-                            **item['rubric'],
+                # Only include rubrics that have at least some clinical data
+                rubric_rows = []
+                for item in top_for_sym:
+                    rub = item['rubric']
+                    has_medicines  = bool(item['medicines'])
+                    has_modalities = bool(rub['modalities']['aggravations'] or rub['modalities']['ameliorations'])
+                    has_synonyms   = bool(rub['synonyms'])
+                    # Always include rubric if it has a name match — omit only if truly empty
+                    if has_medicines or has_modalities or has_synonyms or 'name' in rub.get('matched_fields', []) or 'exact_match' in rub.get('matched_fields', []):
+                        rubric_rows.append({
+                            **rub,
                             'score': round(item['score'], 2),
                             'matched_symptoms': item['matched_symptoms'],
                             'medicines': item['medicines']
-                        } for item in top_for_sym
-                    ],
-                    'score': top_for_sym[0]['score'] if top_for_sym else 0
-                })
-                
-                # Update all_selected_rubrics_dict for global chart
-                for item in top_for_sym:
-                    r_id = item['rubric']['id']
-                    if r_id not in all_selected_rubrics_dict or item['score'] > all_selected_rubrics_dict[r_id]['score']:
-                        all_selected_rubrics_dict[r_id] = item
-            else:
-                symptoms_breakdown.append({
-                    'symptom': sym_str,
-                    'rubric_count': 0,
-                    'rubrics': []
-                })
+                        })
+
+                if rubric_rows:
+                    symptoms_breakdown.append({
+                        'symptom': sym_str,
+                        'rubric_count': len(rubric_rows),
+                        'rubrics': rubric_rows,
+                        'score': rubric_rows[0]['score']
+                    })
+                    # Update all_selected_rubrics_dict for global chart
+                    for item in top_for_sym:
+                        r_id = item['rubric']['id']
+                        if r_id not in all_selected_rubrics_dict or item['score'] > all_selected_rubrics_dict[r_id]['score']:
+                            all_selected_rubrics_dict[r_id] = item
+                # If rubric_rows is empty, don't add this symptom to breakdown at all
 
         # Step 4: Aggregate medicines across top rubrics
         top_rubrics = list(all_selected_rubrics_dict.values())
