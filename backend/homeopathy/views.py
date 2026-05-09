@@ -8758,8 +8758,9 @@ def doctor_rubric_repertorize(request):
                     has_medicines  = bool(item['medicines'])
                     has_modalities = bool(rub['modalities']['aggravations'] or rub['modalities']['ameliorations'])
                     has_synonyms   = bool(rub['synonyms'])
-                    # Always include rubric if it has a name match — omit only if truly empty
-                    if has_medicines or has_modalities or has_synonyms or 'name' in rub.get('matched_fields', []) or 'exact_match' in rub.get('matched_fields', []):
+                    
+                    # Strictly require clinical content
+                    if has_medicines or has_modalities or has_synonyms:
                         rubric_rows.append({
                             **rub,
                             'score': round(item['score'], 2),

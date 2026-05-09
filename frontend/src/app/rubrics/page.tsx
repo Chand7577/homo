@@ -884,7 +884,7 @@ export default function RubricsPage() {
                                   </div>
                                 )}
                                 {!aggrs.length && !amels.length && !synonyms.length && (
-                                  <span className="text-xs text-slate-300 italic">No nuances</span>
+                                  <span className="text-[10px] text-slate-400 font-medium italic bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Standard Presentation</span>
                                 )}
                               </div>
                             </td>
