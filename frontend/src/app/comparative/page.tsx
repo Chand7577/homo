@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Activity } from "lucide-react";
+import { ArrowLeft, Activity, Zap, BookOpen } from "lucide-react";
 import Link from "next/link";
 
 interface SelectedRubric {
