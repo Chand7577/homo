@@ -692,7 +692,7 @@ export default function RubricsPage() {
                             <Zap className="w-3.5 h-3.5 text-emerald-500" />
                             Medicine coverage
                           </h3>
-                          <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border bg-green-100 text-green-700 border-green-200">
+                          <span className="px-2 py-1 rounded-md text-[30px] font-black uppercase tracking-wider border bg-green-100 text-green-700 border-green-200">
                             100%
                           </span>
                         </div>
