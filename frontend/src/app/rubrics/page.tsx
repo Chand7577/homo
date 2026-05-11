@@ -473,7 +473,7 @@ export default function RubricsPage() {
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 md:pb-6">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
@@ -535,6 +535,15 @@ export default function RubricsPage() {
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               ANALYZE
             </button>
+            {isAnalysisModalOpen && (
+              <button 
+                onClick={() => setIsAnalysisModalOpen(false)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
+              >
+                <X className="w-4 h-4 text-red-500" />
+                CLOSE
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -544,7 +553,7 @@ export default function RubricsPage() {
 
 
         {/* MAIN AREA: 3 Columns */}
-        <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col p-6">
+        <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col p-4 md:p-6 h-full min-h-0">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-700 text-sm font-medium animate-shake">
               <AlertCircle className="w-5 h-5" />
@@ -554,23 +563,7 @@ export default function RubricsPage() {
           )}
 
           {isAnalysisModalOpen ? (
-            <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              {/* Header */}
-              <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
-                <div>
-                  <h2 className="text-xl font-bold flex items-center gap-2 text-gray-900">
-                    <Activity className="w-5 h-5 text-indigo-500" />
-                    Comparative Analysis
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Showing results across {(selectedChapters.length > 0 ? selectedChapters : identifiedChapters).length} chapters</p>
-                </div>
-                <button 
-                  onClick={() => setIsAnalysisModalOpen(false)} 
-                  className="px-6 py-2 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-all shadow-md"
-                >
-                  Close Results
-                </button>
-              </div>
+            <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden h-full min-h-0">
 
               {(() => {
                 const allSymptomRows: { chapter: Chapter, symptom: string, rubric: any, serial: number }[] = [];
@@ -620,21 +613,27 @@ export default function RubricsPage() {
                 }
 
                 return (
-                  <div className="flex-1 overflow-auto custom-scrollbar p-6">
+                  <div className="flex-1 flex flex-col overflow-hidden p-2 md:p-6 h-full min-h-0">
                     {/* Legend Section */}
-                    <div className="mb-6 flex flex-wrap items-center gap-6 px-5 py-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 shadow-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm">1</div>
-                        <span className="text-xs font-bold text-indigo-900 uppercase tracking-tight">Rubric Serial Number</span>
+                    <div className="mb-6 flex flex-wrap items-center justify-between gap-6 px-5 py-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 shadow-sm">
+                      <div className="flex flex-wrap items-center gap-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm">1</div>
+                          <span className="text-xs font-bold text-indigo-900 uppercase tracking-tight">Rubric Serial Number</span>
+                        </div>
+                        <div className="w-px h-4 bg-indigo-200 hidden md:block" />
+                        <div className="flex items-center gap-2">
+                          <div className="px-2 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-black border border-green-200 uppercase">100% Match</div>
+                          <span className="text-xs font-bold text-indigo-900 uppercase tracking-tight">Total Case Coverage</span>
+                        </div>
                       </div>
-                      <div className="w-px h-4 bg-indigo-200 hidden md:block" />
-                      <div className="flex items-center gap-2">
-                        <div className="px-2 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-black border border-green-200 uppercase">100% Match</div>
-                        <span className="text-xs font-bold text-indigo-900 uppercase tracking-tight">Total Case Coverage</span>
+                      <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                        Showing results across <span className="text-indigo-600">{(selectedChapters.length > 0 ? selectedChapters : identifiedChapters).length}</span> chapters
                       </div>
                     </div>
 
-                    <div className="flex flex-col lg:flex-row items-start gap-4 min-h-0 w-full">
+                    <div className="flex-1 flex flex-col lg:flex-row items-stretch gap-4 min-h-0 w-full overflow-hidden">
                       
                       {/* Box 1: Clinical Chapters */}
                       <div className="lg:w-[12%] flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden shrink-0">
@@ -643,7 +642,7 @@ export default function RubricsPage() {
                             Chapters
                           </h3>
                         </div>
-                        <div className="p-4 overflow-y-auto custom-scrollbar space-y-4">
+                        <div className="p-4 overflow-y-auto custom-scrollbar space-y-4 flex-1 min-h-0">
                           {(() => {
                             const uniqueChapters = Array.from(new Set(allSymptomRows.map(r => r.chapter.id)))
                               .map(id => allSymptomRows.find(r => r.chapter.id === id)!.chapter);
@@ -667,7 +666,7 @@ export default function RubricsPage() {
                             Rubrics
                           </h3>
                         </div>
-                        <div className="p-4 overflow-y-auto custom-scrollbar space-y-3">
+                        <div className="p-4 overflow-y-auto custom-scrollbar space-y-3 flex-1 min-h-0">
                           {allSymptomRows.map((item, i) => (
                             <div key={i} className="p-3 bg-blue-50/30 border border-blue-100 rounded-xl flex items-start gap-3 hover:bg-blue-50/60 transition-all group">
                               <span className="w-6 h-6 shrink-0 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-md">
@@ -687,39 +686,47 @@ export default function RubricsPage() {
                       </div>
 
                       {/* Box 3: Remedy Analysis */}
-                      <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                        <div className="p-4 bg-gray-50 border-b border-gray-100">
+                      <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-h-0 h-full">
+                        <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                           <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
                             <Zap className="w-3.5 h-3.5 text-emerald-500" />
                             Medicine coverage
                           </h3>
+                          <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border bg-green-100 text-green-700 border-green-200">
+                            100%
+                          </span>
                         </div>
-                        <div className="p-4 overflow-y-auto custom-scrollbar space-y-6">
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border bg-green-100 text-green-700 border-green-200">
-                                100%
-                              </span>
-                              <div className="h-px flex-1 bg-gray-100" />
-                            </div>
-                            
-                            <div className="grid grid-cols-3 gap-3">
-                              {sortedMeds.map((med) => (
-                                <div key={med.id} className="relative flex flex-col bg-white border border-gray-100 rounded-xl p-3 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group overflow-hidden">
-                                  <span className="text-sm font-black text-gray-900 truncate mb-2 group-hover:text-indigo-600" title={med.name}>
-                                    {med.name}
-                                  </span>
-                                  <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-gray-50">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter mr-1">Covers:</span>
-                                    {med.matchedRowNumbers.map(num => (
-                                      <span key={num} className="w-5 h-5 flex items-center justify-center rounded bg-indigo-600 text-white font-bold text-[10px] shadow-sm group-hover:bg-indigo-700 transition-colors">
-                                        {num}
-                                      </span>
-                                    ))}
+                        <div className="p-4 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+                          <div className="space-y-8">
+                            {(() => {
+                              // Group medicines by each rubric's serial number
+                              return allSymptomRows.map(row => (
+                                <div key={row.serial} className="space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full">
+                                      <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">COVERS</span>
+                                      <div className="w-5 h-5 shrink-0 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm">
+                                        {row.serial}
+                                      </div>
+                                    </div>
+                                    <div className="h-px flex-1 bg-gray-100" />
+                                  </div>
+                                  
+                                  <div className="flex flex-wrap gap-3">
+                                    {sortedMeds
+                                      .filter(med => med.matchedRowNumbers.includes(row.serial))
+                                      .map((med) => (
+                                        <div key={med.id} className="min-w-[140px] flex flex-col bg-white border border-gray-100 rounded-xl p-3 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group overflow-hidden">
+                                          <span className="text-sm font-black text-gray-900 truncate group-hover:text-indigo-600" title={med.name}>
+                                            {med.name}
+                                          </span>
+                                        </div>
+                                      ))
+                                    }
                                   </div>
                                 </div>
-                              ))}
-                            </div>
+                              ));
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -813,7 +820,9 @@ export default function RubricsPage() {
                   <div className="flex flex-wrap gap-3">
                     {globalSymptoms.map((sym, idx) => (
                       <div key={idx} className="group flex items-center gap-3 px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white hover:border-indigo-300 hover:shadow-md transition-all animate-in slide-in-from-top-2">
-                        <Tag className="w-4 h-4 text-indigo-400" />
+                        <div className="w-6 h-6 shrink-0 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shadow-md">
+                          {idx + 1}
+                        </div>
                         <span className="text-sm font-bold text-gray-800">{sym}</span>
                         <button onClick={() => setGlobalSymptoms(prev => prev.filter((_, i) => i !== idx))} className="ml-2">
                           <X className="w-4 h-4 text-gray-300 group-hover:text-red-500 transition-colors" />
