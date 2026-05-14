@@ -32,8 +32,16 @@ import { API_BASE } from "@/config";
 interface Rubric {
   id: number;
   name: string;
+  name_hindi?: string;
   description?: string;
   category?: string;
+  full_path?: string;
+  chapter_name?: string;
+}
+
+interface Chapter {
+  name: string;
+  rubrics: Rubric[];
 }
 
 interface SelectedRubric {
@@ -75,9 +83,11 @@ interface Case {
 const DoctorRepertorize = () => {
   // Search & Rubrics
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Rubric[]>([]);
+  const [searchChapters, setSearchChapters] = useState<Chapter[]>([]);
   const [selectedRubrics, setSelectedRubrics] = useState<SelectedRubric[]>([]);
   const [searching, setSearching] = useState(false);
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const RUBRICS_PREVIEW = 5; // show this many before "Show more"
 
   // Repertorization
   const [repertorizationMethod, setRepertorizationMethod] = useState<
@@ -99,11 +109,13 @@ const DoctorRepertorize = () => {
   // Debounce search
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
-      setSearchResults([]);
+      setSearchChapters([]);
+      setExpandedChapters(new Set());
       return;
     }
 
     const timer = setTimeout(() => {
+      setExpandedChapters(new Set()); // reset expansions on new search
       searchRubrics();
     }, 300);
 
@@ -165,7 +177,7 @@ const DoctorRepertorize = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setSearchResults(data.rubrics || []);
+        setSearchChapters(data.chapters || []);
       }
     } catch (err) {
       console.error("Error searching rubrics:", err);
@@ -191,7 +203,7 @@ const DoctorRepertorize = () => {
       },
     ]);
     setSearchQuery("");
-    setSearchResults([]);
+    setSearchChapters([]);
   };
 
   const removeRubric = (rubricId: number) => {
@@ -327,6 +339,7 @@ const DoctorRepertorize = () => {
     setSelectedRubrics([]);
     setRepertorizationResult(null);
     setSelectedCase(null);
+    setSearchChapters([]);
   };
 
   const getIntensityColor = (intensity: number) => {
@@ -426,13 +439,13 @@ const DoctorRepertorize = () => {
             {/* Left Column - Rubric Selection */}
             <div className="lg:col-span-2 space-y-6">
               {/* Search Rubrics */}
-              <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 overflow-visible">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">
                   Search & Add Rubrics
                 </h2>
 
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 z-10" />
                   <input
                     type="text"
                     placeholder="Search rubrics by name or symptom..."
@@ -443,50 +456,89 @@ const DoctorRepertorize = () => {
                   {searching && (
                     <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 animate-spin" />
                   )}
-                </div>
 
-                {/* Search Results */}
-                {searchResults.length > 0 && (
-                  <div className="mt-4 max-h-80 overflow-y-auto space-y-2">
-                    {searchResults.map((rubric, index) => (
-                      <button
-                        key={rubric.id}
-                        onClick={() => addRubric(rubric)}
-                        className="w-full text-left p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all border border-gray-200 hover:border-gray-300 group"
+                  {/* Floating dropdown overlay */}
+                  {(searchChapters.length > 0 || (searchQuery.length >= 2 && !searching && searchChapters.length === 0)) && (
+                    <div className="absolute top-full left-0 right-0 mt-2 z-[9999] rounded-2xl shadow-2xl border border-gray-200 overflow-hidden bg-white">
+                      <div 
+                        className="max-h-[420px] overflow-y-auto overscroll-contain custom-scrollbar bg-white pr-1 rounded-2xl"
+                        onWheel={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900 group-hover:text-gray-900 truncate">
-                              {index + 1}. {rubric.name}
-                            </p>
-                            {rubric.description && (
-                              <p className="text-xs text-gray-600 mt-1 line-clamp-1">
-                                {rubric.description}
-                              </p>
-                            )}
-                            {rubric.category && (
-                              <span className="inline-block mt-2 text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded">
-                                {rubric.category}
-                              </span>
-                            )}
+                        {searchChapters.length > 0 ? (
+                          <div className="p-2 space-y-2">
+                            {searchChapters.map((chapter) => {
+                              const isExpanded = expandedChapters.has(chapter.name);
+                              const visibleRubrics = isExpanded ? chapter.rubrics : chapter.rubrics.slice(0, RUBRICS_PREVIEW);
+                              const hasMore = chapter.rubrics.length > RUBRICS_PREVIEW;
+                              return (
+                                <div key={chapter.name} className="rounded-xl border border-gray-100 bg-white">
+                                  <div className="bg-gray-50 px-3 py-2 flex items-center justify-between border-b border-gray-100">
+                                    <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                                      <BookOpen className="w-3 h-3 text-gray-400" />
+                                      {chapter.name}
+                                    </h3>
+                                    <span className="text-[10px] font-bold text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">
+                                      {chapter.rubrics.length}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    {visibleRubrics.map((rubric) => (
+                                      <button
+                                        key={rubric.id}
+                                        onMouseDown={(e) => { e.preventDefault(); addRubric(rubric); }}
+                                        className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 transition-colors border-b border-gray-50 last:border-0 group"
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-indigo-700">
+                                              {rubric.name}
+                                            </p>
+                                            {rubric.name_hindi && (
+                                              <p className="text-xs text-gray-500">{rubric.name_hindi}</p>
+                                            )}
+                                            <p className="text-[10px] text-gray-400 truncate italic mt-0.5">
+                                              {rubric.full_path || rubric.parent_name}
+                                            </p>
+                                          </div>
+                                          <Plus className="w-4 h-4 text-gray-300 group-hover:text-indigo-600 flex-shrink-0" />
+                                        </div>
+                                      </button>
+                                    ))}
+                                    {hasMore && (
+                                      <button
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          setExpandedChapters(prev => {
+                                            const next = new Set(prev);
+                                            if (isExpanded) next.delete(chapter.name);
+                                            else next.add(chapter.name);
+                                            return next;
+                                          });
+                                        }}
+                                        className="w-full px-3 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1.5 border-t border-gray-100"
+                                      >
+                                        {isExpanded ? (
+                                          <> ↑ Show less </>
+                                        ) : (
+                                          <> ↓ Show {chapter.rubrics.length - RUBRICS_PREVIEW} more rubrics </>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                          <Plus className="w-5 h-5 text-gray-400 group-hover:text-gray-900 flex-shrink-0 ml-4" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {searchQuery.length >= 2 &&
-                  !searching &&
-                  searchResults.length === 0 && (
-                    <div className="mt-4 text-center py-8">
-                      <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500">
-                        No rubrics found. Try a different search term.
-                      </p>
+                        ) : (
+                          <div className="p-8 text-center">
+                            <BookOpen className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                            <p className="text-sm text-gray-500 font-medium">No matches found in any chapter.</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
+                </div>
               </div>
 
               {/* Selected Rubrics */}

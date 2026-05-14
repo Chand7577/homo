@@ -48,6 +48,30 @@ const KEYWORD_INDEX: Record<string, string> = {
   ear:"Ears", ears:"Ears", hearing:"Ears", tinnitus:"Ears", deafness:"Ears",
   otitis:"Ears", discharge:"Ears", cerumen:"Ears", wax:"Ears",
   "कान":"Ears", "कानों":"Ears", "कान में":"Ears",
+
+  // ── Nose ─────────────────────────────────────────────────────────────────
+  nose:"Nose", coryza:"Nose", sneezing:"Nose", epistaxis:"Nose", sinusitis:"Nose",
+  smell:"Nose", sniffing:"Nose", "नाक":"Nose", "छींक":"Nose", "जुकाम":"Nose",
+
+  // ── Stomach ──────────────────────────────────────────────────────────────
+  stomach:"Stomach", appetite:"Stomach", thirst:"Stomach", nausea:"Stomach",
+  vomiting:"Stomach", indigestion:"Stomach", heartburn:"Stomach", eructations:"Stomach",
+  "पेट":"Stomach", "प्यास":"Stomach", "भूख":"Stomach", "उल्टी":"Stomach", "मतली":"Stomach",
+
+  // ── Abdomen ──────────────────────────────────────────────────────────────
+  abdomen:"Abdomen", abdominal:"Abdomen", liver:"Abdomen", spleen:"Abdomen", flatulence:"Abdomen",
+  colic:"Abdomen", distension:"Abdomen", "पेट":"Abdomen", "कोख":"Abdomen", "पेड़ू":"Abdomen",
+
+  // ── Extremities ──────────────────────────────────────────────────────────
+  extremities:"Extremities", hands:"Extremities", legs:"Extremities", knee:"Extremities",
+  shoulder:"Extremities", joints:"Extremities", rheumatism:"Extremities", numbness:"Extremities",
+  "हाथ":"Extremities", "पैर":"Extremities", "घुटने":"Extremities", "जोड़ों":"Extremities",
+
+  // ── Generalities ─────────────────────────────────────────────────────────
+  generalities:"Generalities", weakness:"Generalities", fatigue:"Generalities",
+  collapse:"Generalities", convulsions:"Generalities", pain:"Generalities",
+  "सामान्य":"Generalities", "कमजोरी":"Generalities", "थकावट":"Generalities",
+  "दर्द":"Generalities", "शरीर":"Generalities", "बदन":"Generalities", "पूरे":"Generalities",
 } as Record<string, string>;
 
 // Exact phrase index to override single-word tokens
@@ -56,6 +80,12 @@ const PHRASE_INDEX: Record<string, string> = {
   "सिर दर्द":    "Head",
   "आँख में":     "Eyes",
   "कान में":     "Ears",
+  "पेट में":     "Stomach",
+  "हाथ पैर":    "Extremities",
+  "पूरे शरीर":   "Generalities",
+  "बदन दर्द":    "Generalities",
+  "शरीर में दर्द": "Generalities",
+  "abdominal pain": "Abdomen",
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -115,9 +145,15 @@ export default function RubricsPage() {
   // Results: Map<chapterId, RepertoResult>
   const [analysisResults, setAnalysisResults] = useState<Record<number, RepertoResult>>({});
   
-  const [globalSymptoms, setGlobalSymptoms] = useState<string[]>([]);
+  const [globalSymptoms, setGlobalSymptoms] = useState<{ text: string, rubric?: any }[]>([]);
   const [globalInput, setGlobalInput] = useState("");
+  const [globalSearchChapters, setGlobalSearchChapters] = useState<{name:string; rubrics:any[]}[]>([]);
+  const [globalSearching, setGlobalSearching] = useState(false);
+  const [globalExpandedChapters, setGlobalExpandedChapters] = useState<Set<string>>(new Set());
+  const GLOBAL_PREVIEW = 5;
   const [identifiedChapters, setIdentifiedChapters] = useState<Chapter[]>([]);
+  // Rows built directly from pre-selected rubrics (no API call needed)
+  const [preSelectedRows, setPreSelectedRows] = useState<{ chapter: Chapter, symptom: string, rubric: any }[]>([]);
   
   const [loading, setLoading] = useState(false);
   const [chapterLoading, setChapterLoading] = useState(true);
@@ -136,6 +172,9 @@ export default function RubricsPage() {
   
   const recognitionRef = useRef<any>(null);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const globalInputContainerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   // Probe cache: symptom string → identified root chapter name
   // Persists across analyses in the same session — avoids repeat API probes.
   const probeCache = useRef<Map<string, string>>(new Map());
@@ -202,6 +241,67 @@ export default function RubricsPage() {
       }
     }
   }, [listeningChapterId]);
+
+  // ── Global input live search ───────────────────────────────────────────────
+  useEffect(() => {
+    if (globalInput.trim().length < 2) {
+      setGlobalSearchChapters([]);
+      setGlobalExpandedChapters(new Set());
+      setDropdownPos(null);
+      return;
+    }
+    // Calculate fixed position from the container's bounding rect
+    if (globalInputContainerRef.current) {
+      const rect = globalInputContainerRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 12, left: rect.left, width: rect.width });
+    }
+    const timer = setTimeout(() => {
+      searchGlobalRubrics(globalInput);
+      setGlobalExpandedChapters(new Set());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [globalInput]);
+
+  // Close dropdown on outside click or page scroll
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      // Don't close if clicking inside the input container OR the dropdown itself
+      const isInsideInput = globalInputContainerRef.current?.contains(e.target as Node);
+      const isInsideDropdown = dropdownRef.current?.contains(e.target as Node);
+      
+      if (!isInsideInput && !isInsideDropdown) {
+        setDropdownPos(null);
+        setGlobalSearchChapters([]);
+      }
+    };
+    const onScroll = (e: Event) => { 
+      if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) return;
+      setDropdownPos(null); 
+      setGlobalSearchChapters([]); 
+    };
+    document.addEventListener('mousedown', close);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, []);
+
+  const searchGlobalRubrics = async (q: string) => {
+    setGlobalSearching(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/doctor/rubrics/search/?query=${encodeURIComponent(q)}`,
+        { credentials: "include" }
+      );
+      const data = await res.json();
+      setGlobalSearchChapters(data.chapters || []);
+    } catch {
+      setGlobalSearchChapters([]);
+    } finally {
+      setGlobalSearching(false);
+    }
+  };
 
   const toggleGlobalListening = () => {
     if (!recognitionRef.current) {
@@ -296,22 +396,18 @@ export default function RubricsPage() {
 
   const runAnalysis = async () => {
     const hasManualSelection = selectedChapters.length > 0;
-    const symsToAnalyze = hasManualSelection
-      ? selectedChapters.flatMap(c => chapterSymptoms[c.id] || [])
-      : globalSymptoms;
 
-    if (symsToAnalyze.length === 0) {
-      setError("Add at least one symptom to analyze.");
-      return;
-    }
-
-    setError("");
-    setLoading(true);
-    const newResults: Record<number, RepertoResult> = {};
-
-    try {
-      if (hasManualSelection) {
-        // ── Manual mode: query each selected chapter directly ───────────────
+    if (hasManualSelection) {
+      // ── Manual chapter mode: query each selected chapter directly ────────
+      const symsToAnalyze = selectedChapters.flatMap(c => chapterSymptoms[c.id] || []);
+      if (symsToAnalyze.length === 0) {
+        setError("Add at least one symptom to analyze.");
+        return;
+      }
+      setError("");
+      setLoading(true);
+      const newResults: Record<number, RepertoResult> = {};
+      try {
         await Promise.all(
           selectedChapters
             .filter(c => (chapterSymptoms[c.id]?.length || 0) > 0)
@@ -325,69 +421,97 @@ export default function RubricsPage() {
               if (res.ok && data.success) newResults[chapter.id] = data;
             })
         );
-      } else {
-        // ── Global mode: fast chapter identification ──────────────────────────
-        //
-        // STEP 1: Score chapters using the local KEYWORD_INDEX (O(words) per symptom).
-        //         For any symptom whose words are ALL unknown to the index,
-        //         fall back to an API probe — and cache that result.
+        if (Object.keys(newResults).length === 0) {
+          setError("No rubric matches found. Try different symptom keywords.");
+          return;
+        }
+        setAnalysisResults(newResults);
+        setPreSelectedRows([]);
+        setIsAnalysisModalOpen(true);
+      } catch (e: any) {
+        setError("Analysis failed: " + (e.message || "Network error."));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
+    // ── Global mode ──────────────────────────────────────────────────────────
+    if (globalSymptoms.length === 0) {
+      setError("Add at least one symptom to analyze.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+    // Reset stale state from any previous analysis run
+    setIdentifiedChapters([]);
+    setAnalysisResults({});
+    setPreSelectedRows([]);
+    const newResults: Record<number, RepertoResult> = {};
+    const directRows: { chapter: Chapter, symptom: string, rubric: any }[] = [];
+
+    try {
+      // --- Separate pre-selected rubrics from raw text symptoms ---
+      const withRubric = globalSymptoms.filter(s => s.rubric);
+      const rawTextSyms = globalSymptoms.filter(s => !s.rubric);
+
+      // 1. Pre-selected rubrics: build rows directly from stored data — NO API call
+      for (const entry of withRubric) {
+        const rb = entry.rubric;
+        // Find the parent chapter from our chapters list
+        const chapterName = (rb.chapter_name || (rb.full_path || "").split(">")[0]).trim();
+        const chapter = chapters.find(ch =>
+          ch.name.toLowerCase() === chapterName.toLowerCase() ||
+          ch.name.toLowerCase().includes(chapterName.toLowerCase()) ||
+          chapterName.toLowerCase().includes(ch.name.toLowerCase())
+        );
+        if (chapter) {
+          directRows.push({ chapter, symptom: entry.text, rubric: rb });
+        }
+      }
+
+      // 2. Raw text symptoms: use NLP + API
+      if (rawTextSyms.length > 0) {
         const resolveChapterName = async (sym: string): Promise<string[]> => {
-          // Check probe cache first
           if (probeCache.current.has(sym)) return [probeCache.current.get(sym)!];
-
           const stopWords = new Set([
             "में", "का", "की", "से", "को", "पर", "और", "है", "हैं", "था", "थी", "थे", "वाला", "वाली", "वाले", "के", "लिए", "करता", "करती", "करते",
             "the", "in", "at", "on", "and", "is", "was", "with", "for", "during", "of", "to", "a", "an", "this", "that", "these", "those"
           ]);
-
           const lowerSym = sym.toLowerCase();
-
-          // Check exact phrase matches first
-          for (const [phrase, chName] of Object.entries(PHRASE_INDEX)) {
-            if (lowerSym.includes(phrase.toLowerCase())) {
-              probeCache.current.set(sym, chName);
-              return [chName];
-            }
+          if (sym.includes(">")) {
+            const root = sym.split(">")[0].trim();
+            const ch = chapters.find(c => c.name.toLowerCase() === root.toLowerCase());
+            if (ch) { probeCache.current.set(sym, ch.name); return [ch.name]; }
           }
-
-          // Tokenize symptom: split on spaces, commas, pipe, Hindi danda, periods, etc.
+          for (const [phrase, chName] of Object.entries(PHRASE_INDEX)) {
+            if (lowerSym.includes(phrase.toLowerCase())) { probeCache.current.set(sym, chName); return [chName]; }
+          }
           const tokens = lowerSym.split(/[\s,।|.:;!\-?–—]+/).filter(t => t.length >= 2 && !stopWords.has(t));
-          
-          // Score each token against the keyword index
           const scores: Record<string, number> = {};
           for (const token of tokens) {
-            // Exact match — GENERALITIES gets lower base score
             if (KEYWORD_INDEX[token]) {
-              const weight = (KEYWORD_INDEX[token] === "GENERALITIES") ? 5 : 10;
-              scores[KEYWORD_INDEX[token]] = (scores[KEYWORD_INDEX[token]] || 0) + weight;
+              const w = KEYWORD_INDEX[token] === "GENERALITIES" ? 5 : 10;
+              scores[KEYWORD_INDEX[token]] = (scores[KEYWORD_INDEX[token]] || 0) + w;
               continue;
             }
-            // Prefix / substring match (handles plural, conjugations safely)
             for (const [kw, chName] of Object.entries(KEYWORD_INDEX)) {
               if (token === kw || (token.length >= 4 && kw.length >= 4 && (token.startsWith(kw) || kw.startsWith(token)))) {
-                // Anatomy chapters get 10 points (highly specific)
-                // Condition chapters (Skin, Fever, Sleep) get 5 points
-                // Generalities get 3 points
-                let weight = 10;
-                if (chName === "GENERALITIES") weight = 3;
-                else if (["Skin", "Fever", "Sleep", "Nervous"].includes(chName as string)) weight = 5;
-                
-                scores[chName as string] = (scores[chName as string] || 0) + weight;
+                let w = 10;
+                if (chName === "GENERALITIES") w = 3;
+                else if (["Skin", "Fever", "Sleep", "Nervous"].includes(chName as string)) w = 5;
+                scores[chName as string] = (scores[chName as string] || 0) + w;
               }
             }
           }
-
           if (Object.keys(scores).length > 0) {
-            // Return all chapters that are tied or very close to the top score
             const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-            const topScore = sorted[0][1];
-            const bestChapters = sorted.filter(s => topScore - s[1] <= 4).map(s => s[0]);
-            probeCache.current.set(sym, bestChapters[0]); // Cache the primary one
-            return bestChapters;
+            const top = sorted[0][1];
+            const best = sorted.filter(s => top - s[1] <= 4).map(s => s[0]);
+            probeCache.current.set(sym, best[0]);
+            return best;
           }
-
-          // Fallback: single API probe (only for completely unknown terms)
           try {
             const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
               method: "POST", credentials: "include",
@@ -398,24 +522,17 @@ export default function RubricsPage() {
             const data = await res.json();
             if (!data.success || !data.top_rubrics?.length) return [];
             const rootName = (data.top_rubrics[0].full_path || "").split(">")[0].trim();
-            probeCache.current.set(sym, rootName); // Cache for next time
+            probeCache.current.set(sym, rootName);
             return [rootName];
-          } catch {
-            return [];
-          }
+          } catch { return []; }
         };
 
-        // Resolve all symptoms in parallel
         const resolved = await Promise.all(
-          globalSymptoms.map(async sym => ({ sym, rootNames: await resolveChapterName(sym) }))
+          rawTextSyms.map(async entry => ({ entry, rootNames: await resolveChapterName(entry.text) }))
         );
-
-        // Group symptoms by matched chapter
         const chapterSymMap: Record<number, { chapter: Chapter; syms: string[] }> = {};
-        
-        for (const { sym, rootNames } of resolved) {
+        for (const { entry, rootNames } of resolved) {
           if (!rootNames || rootNames.length === 0) continue;
-          
           for (const rootName of rootNames) {
             const matched = chapters.find(ch =>
               ch.name.toLowerCase() === rootName.toLowerCase() ||
@@ -424,38 +541,33 @@ export default function RubricsPage() {
             );
             if (!matched) continue;
             if (!chapterSymMap[matched.id]) chapterSymMap[matched.id] = { chapter: matched, syms: [] };
-            if (!chapterSymMap[matched.id].syms.includes(sym)) {
-              chapterSymMap[matched.id].syms.push(sym);
-            }
+            if (!chapterSymMap[matched.id].syms.includes(entry.text)) chapterSymMap[matched.id].syms.push(entry.text);
           }
         }
-
         const chaptersToQuery = Object.values(chapterSymMap);
-        if (chaptersToQuery.length === 0) {
-          setError("Could not identify relevant chapters. Try more specific keywords.");
-          return;
+        if (chaptersToQuery.length > 0) {
+          setIdentifiedChapters(chaptersToQuery.map(c => c.chapter));
+          await Promise.all(
+            chaptersToQuery.map(async ({ chapter, syms }) => {
+              const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
+                method: "POST", credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chapter_id: chapter.id, symptoms: syms, top_n: 7 }),
+              });
+              const data = await res.json();
+              if (res.ok && data.success) newResults[chapter.id] = data;
+            })
+          );
         }
-        setIdentifiedChapters(chaptersToQuery.map(c => c.chapter));
-
-        // STEP 2: Query each identified chapter (parallel, all use real IDs)
-        await Promise.all(
-          chaptersToQuery.map(async ({ chapter, syms }) => {
-            const res = await fetch(`${API_BASE}/doctor/rubrics/repertorize/`, {
-              method: "POST", credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chapter_id: chapter.id, symptoms: syms, top_n: 7 }),
-            });
-            const data = await res.json();
-            if (res.ok && data.success) newResults[chapter.id] = data;
-          })
-        );
       }
 
-      if (Object.keys(newResults).length === 0) {
+      // Require at least some data to show
+      if (directRows.length === 0 && Object.keys(newResults).length === 0) {
         setError("No rubric matches found. Try different symptom keywords.");
         return;
       }
 
+      setPreSelectedRows(directRows);
       setAnalysisResults(newResults);
       setIsAnalysisModalOpen(true);
     } catch (e: any) {
@@ -553,7 +665,7 @@ export default function RubricsPage() {
 
 
         {/* MAIN AREA: 3 Columns */}
-        <main className="flex-1 bg-gray-50 overflow-hidden flex flex-col p-4 md:p-6 h-full min-h-0">
+        <main className={`flex-1 bg-gray-50 flex flex-col p-4 md:p-6 h-full min-h-0 custom-scrollbar ${isAnalysisModalOpen ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-700 text-sm font-medium animate-shake">
               <AlertCircle className="w-5 h-5" />
@@ -569,6 +681,12 @@ export default function RubricsPage() {
                 const allSymptomRows: { chapter: Chapter, symptom: string, rubric: any, serial: number }[] = [];
                 let serialCounter = 1;
                 
+                // 1. First add directly pre-selected rubric rows (no API call)
+                preSelectedRows.forEach(row => {
+                  allSymptomRows.push({ ...row, serial: serialCounter++ });
+                });
+
+                // 2. Then add API-resolved rows
                 (selectedChapters.length > 0 ? selectedChapters : identifiedChapters).forEach((chapter) => {
                   const result = analysisResults[chapter.id];
                   if (result && result.symptoms_breakdown) {
@@ -629,14 +747,14 @@ export default function RubricsPage() {
                       </div>
                       <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
                         <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                        Showing results across <span className="text-indigo-600">{(selectedChapters.length > 0 ? selectedChapters : identifiedChapters).length}</span> chapters
+                        Showing results across <span className="text-indigo-600">{new Set(allSymptomRows.map(r => r.chapter.id)).size}</span> chapters
                       </div>
                     </div>
 
                     <div className="flex-1 flex flex-col lg:flex-row items-stretch gap-4 min-h-0 w-full overflow-hidden">
                       
                       {/* Box 1: Clinical Chapters */}
-                      <div className="lg:w-[12%] flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden shrink-0">
+                      <div className="lg:w-[12%] flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden shrink-0 h-[200px] lg:h-auto">
                         <div className="p-4 bg-gray-50 border-b border-gray-100">
                           <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">
                             Chapters
@@ -649,7 +767,7 @@ export default function RubricsPage() {
                             
                             return uniqueChapters.map((ch, idx) => (
                               <div key={idx} style={{ backgroundColor: '#ea580c' }} className="p-4 rounded-xl text-center shadow-lg transform transition-all hover:scale-105 active:scale-95 border border-[#c2410c]">
-                                <p className="text-[11px] font-black text-white uppercase leading-tight tracking-wider">
+                                <p className="text-[10px] font-black text-white uppercase leading-tight tracking-wider">
                                   {ch.name}
                                 </p>
                               </div>
@@ -659,7 +777,7 @@ export default function RubricsPage() {
                       </div>
 
                       {/* Box 2: Symptom Rubrics */}
-                      <div className="lg:w-[35%] flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden shrink-0">
+                      <div className="lg:w-[35%] flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden shrink-0 h-[300px] lg:h-auto">
                         <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
                           <Activity className="w-3.5 h-3.5 text-blue-500" />
                           <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest">
@@ -673,10 +791,10 @@ export default function RubricsPage() {
                                 {item.serial}
                               </span>
                               <div className="min-w-0">
-                                <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">
+                                <p className="text-[8px] font-bold text-gray-400 uppercase mb-0.5">
                                   {item.chapter.name}
                                 </p>
-                                <p className="text-[13px] font-bold text-blue-700 leading-snug break-words">
+                                <p className="text-[10px] font-bold text-blue-700 leading-snug break-words">
                                   {item.rubric.full_path || item.rubric.name}
                                 </p>
                               </div>
@@ -686,7 +804,7 @@ export default function RubricsPage() {
                       </div>
 
                       {/* Box 3: Remedy Analysis */}
-                      <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-h-0 h-full">
+                      <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-h-[300px] lg:min-h-0">
                         <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                           <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
                             <Zap className="w-3.5 h-3.5 text-emerald-500" />
@@ -737,7 +855,7 @@ export default function RubricsPage() {
               })()}
             </div>
           ) : selectedChapters.length === 0 ? (
-            <div className="flex-1 flex flex-col p-8 bg-white rounded-3xl border border-gray-200 shadow-sm mx-auto w-full max-w-5xl">
+            <div className="flex-1 flex flex-col p-8 bg-white rounded-3xl border border-gray-200 shadow-sm mx-auto w-full max-w-5xl overflow-visible">
               <div className="flex items-start justify-between mb-8">
                 <div>
                   <h3 className="text-3xl font-black text-gray-900 mb-2 flex items-center gap-3">
@@ -751,11 +869,11 @@ export default function RubricsPage() {
                 </div>
               </div>
               
-              <div className="w-full space-y-8">
-                <div className="relative group">
+              <div className="w-full space-y-8 overflow-visible">
+                <div className="relative group z-50" ref={globalInputContainerRef}>
                   <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-15 group-focus-within:opacity-30 transition duration-1000 group-focus-within:duration-200"></div>
                   <div className="relative flex items-center gap-4 bg-white p-5 rounded-2xl border-2 border-gray-100 focus-within:border-indigo-500 transition-all shadow-sm">
-                    <Search className="w-6 h-6 text-gray-300" />
+                    <Search className="w-6 h-6 text-gray-300 shrink-0" />
                     <input 
                       type="text" 
                       placeholder="Enter a symptom (e.g. Headache in evening, thirst for cold water)..." 
@@ -763,12 +881,14 @@ export default function RubricsPage() {
                       onChange={e => setGlobalInput(e.target.value)}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && globalInput.trim()) {
-                          setGlobalSymptoms(prev => [...prev, globalInput.trim()]);
+                          setGlobalSymptoms(prev => [...prev, { text: globalInput.trim() }]);
                           setGlobalInput("");
+                          setGlobalSearchChapters([]);
                         }
                       }}
                       className="flex-1 bg-transparent border-none outline-none text-xl font-medium placeholder:text-gray-300"
                     />
+                    {globalSearching && <Loader2 className="w-5 h-5 text-indigo-400 animate-spin shrink-0" />}
                     {/* Language toggle */}
                     <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1">
                       <button
@@ -804,8 +924,9 @@ export default function RubricsPage() {
                     <button
                       onClick={() => {
                         if (globalInput.trim()) {
-                          setGlobalSymptoms(prev => [...prev, globalInput.trim()]);
+                          setGlobalSymptoms(prev => [...prev, { text: globalInput.trim() }]);
                           setGlobalInput("");
+                          setGlobalSearchChapters([]);
                         }
                       }}
                       className="px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-black transition-all shadow-lg font-bold text-sm"
@@ -813,6 +934,94 @@ export default function RubricsPage() {
                       ADD
                     </button>
                   </div>
+
+                  {/* Floating rubric dropdown — fixed position avoids all overflow clipping */}
+                  {dropdownPos && (globalSearchChapters.length > 0 || (globalInput.trim().length >= 2 && !globalSearching && globalSearchChapters.length === 0)) && (
+                    <div
+                      ref={dropdownRef}
+                      style={{ 
+                        position: 'fixed', 
+                        top: dropdownPos.top, 
+                        left: dropdownPos.left, 
+                        width: dropdownPos.width, 
+                        zIndex: 99999,
+                        maxHeight: `calc(100vh - ${dropdownPos.top + 20}px)`
+                      }}
+                      className="rounded-2xl shadow-2xl border border-gray-200 bg-white overflow-hidden flex flex-col"
+                    >
+                      <div className="overflow-y-auto custom-scrollbar flex-1">
+                        {globalSearchChapters.length > 0 ? (
+                          <div className="p-2 space-y-2">
+                            <p className="px-3 pt-2 pb-1 text-[10px] font-black text-gray-400 uppercase tracking-widest">Select a specific rubric to add, or press ADD to add the symptom as keyword</p>
+                            {globalSearchChapters.map((chapter) => {
+                              const isExp = globalExpandedChapters.has(chapter.name);
+                              const visible = isExp ? chapter.rubrics : chapter.rubrics.slice(0, GLOBAL_PREVIEW);
+                              const hasMore = chapter.rubrics.length > GLOBAL_PREVIEW;
+                              return (
+                                <div key={chapter.name} className="rounded-xl border border-gray-100">
+                                  <div className="bg-gray-50 px-3 py-2 flex items-center justify-between border-b border-gray-100">
+                                    <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                                      <BookOpen className="w-3 h-3 text-indigo-400" />
+                                      {chapter.name}
+                                    </h3>
+                                    <span className="text-[10px] font-bold text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">{chapter.rubrics.length}</span>
+                                  </div>
+                                  <div>
+                                    {visible.map((rubric: any) => (
+                                      <button
+                                        key={rubric.id}
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          const label = rubric.full_path || rubric.name;
+                                          setGlobalSymptoms(prev => {
+                                            if (prev.some(s => s.text === label)) return prev;
+                                            return [...prev, { text: label, rubric: rubric }];
+                                          });
+                                          setGlobalInput("");
+                                          setGlobalSearchChapters([]);
+                                          setDropdownPos(null);
+                                        }}
+                                        className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 transition-colors border-b border-gray-50 last:border-0 group"
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-indigo-700">{rubric.name}</p>
+                                            {rubric.name_hindi && <p className="text-xs text-gray-500">{rubric.name_hindi}</p>}
+                                            <p className="text-[10px] text-gray-400 truncate italic mt-0.5">{rubric.full_path || rubric.parent_name}</p>
+                                          </div>
+                                          <Plus className="w-4 h-4 text-gray-300 group-hover:text-indigo-600 flex-shrink-0" />
+                                        </div>
+                                      </button>
+                                    ))}
+                                    {hasMore && (
+                                      <button
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          setGlobalExpandedChapters(prev => {
+                                            const next = new Set(prev);
+                                            if (isExp) next.delete(chapter.name); else next.add(chapter.name);
+                                            return next;
+                                          });
+                                        }}
+                                        className="w-full px-3 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1 border-t border-gray-100"
+                                      >
+                                        {isExp ? <>↑ Show less</> : <>↓ Show {chapter.rubrics.length - GLOBAL_PREVIEW} more</>}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center">
+                            <BookOpen className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                            <p className="text-sm text-gray-500 font-medium">No rubrics found. Press ADD to use as keyword.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -823,7 +1032,7 @@ export default function RubricsPage() {
                         <div className="w-6 h-6 shrink-0 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shadow-md">
                           {idx + 1}
                         </div>
-                        <span className="text-sm font-bold text-gray-800">{sym}</span>
+                        <span className="text-sm font-bold text-gray-800">{sym.rubric ? <><span className="text-[10px] font-black text-indigo-400 uppercase mr-1">[Rubric]</span>{sym.text}</> : sym.text}</span>
                         <button onClick={() => setGlobalSymptoms(prev => prev.filter((_, i) => i !== idx))} className="ml-2">
                           <X className="w-4 h-4 text-gray-300 group-hover:text-red-500 transition-colors" />
                         </button>
