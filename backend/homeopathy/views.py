@@ -4666,6 +4666,11 @@ def intelligent_rubric_search(request):
         # ─────────────────────────────────────────────────────────────────────
         BODY_PART_MAP = {
             'head': 'Head',
+            'headache': 'Head',
+            'vertigo': 'Vertigo',
+            'dizziness': 'Vertigo',
+            'dizzy': 'Vertigo',
+            'migraine': 'Head',
             'mind': 'Mind',
             'mental': 'Mind',
             'grief': 'Mind',
@@ -4735,105 +4740,30 @@ def intelligent_rubric_search(request):
         }
 
         # ─────────────────────────────────────────────────────────────────────
-        # 3. HYPHEN-SEPARATED SEARCH  e.g. "MIND - ANGER"
+        # 3. HYPHEN-SEPARATED SEARCH (Removed - standard logic handles this better)
         # ─────────────────────────────────────────────────────────────────────
-        # Normalize various dashes (em-dash, en-dash) to standard hyphen
         normalized_query = query.replace('–', '-').replace('—', '-')
-        if '-' in normalized_query:
-            parts = [p.strip() for p in normalized_query.split('-', 1)]
-            if len(parts) == 2 and parts[0] and parts[1]:
-                main_part, sub_part = parts
-                
-                # Try to resolve main_part to a canonical chapter name
-                resolved_chapter = None
-                extra_main_words = []
-                for word in main_part.lower().split():
-                    if word in BODY_PART_MAP and not resolved_chapter:
-                        resolved_chapter = BODY_PART_MAP[word]
-                    else:
-                        extra_main_words.append(word)
-                
-                chapter_query = resolved_chapter if resolved_chapter else main_part
-                
-                # Combine remaining words from main_part and all words from sub_part
-                search_keywords = extra_main_words + sub_part.lower().split()
-                
-                rubrics_qs = Rubric.objects.filter(is_active=True)
-                
-                # Apply chapter filter (up to 3 levels deep)
-                rubrics_qs = rubrics_qs.filter(
-                    Q(parent__name__icontains=chapter_query) | 
-                    Q(parent__name_hindi__icontains=chapter_query) |
-                    Q(parent__parent__name__icontains=chapter_query) |
-                    Q(parent__parent__parent__name__icontains=chapter_query) |
-                    Q(name__icontains=chapter_query) |
-                    Q(name_hindi__icontains=chapter_query)
-                )
-                
-                # Apply word-by-word symptom filter (checks rubric name and parent names)
-                for word in search_keywords:
-                    if len(word) < 2: continue # Ignore single-letter words
-                    rubrics_qs = rubrics_qs.filter(
-                        Q(name__icontains=word) |
-                        Q(name_hindi__icontains=word) |
-                        Q(parent__name__icontains=word) |
-                        Q(parent__parent__name__icontains=word) |
-                        Q(synonyms__synonym__icontains=word) |
-                        Q(synonyms__synonym_hindi__icontains=word) |
-                        Q(modalities__name__icontains=word) |
-                        Q(modalities__name_hindi__icontains=word)
-                    )
+        # if '-' in normalized_query:
+        #     parts = [p.strip() for p in normalized_query.split('-', 1)]
+        #     if len(parts) == 2 and parts[0] and parts[1]:
+        #         main_part, sub_part = parts
+        # ... logic removed because standard word-based routing + exact path match
+        # handles "Chapter - Symptom" and "Symptom - Modality" perfectly.
 
-                rubrics_qs = rubrics_qs.distinct().select_related(
-                    'parent', 'parent__parent', 'parent__parent__parent'
-                ).annotate(
-                    med_count=Count('medicine_grades', distinct=True)
-                )[:50]
-                rubrics_list_raw = list(rubrics_qs)
-
-                # Score in Python
-                scored = []
-                for rubric in rubrics_list_raw:
-                    score = 0
-                    rname = (rubric.name or '').lower()
-                    rname_hindi = (rubric.name_hindi or '').lower()
-                    pname = (rubric.parent.name if rubric.parent else '').lower()
-                    pname_hindi = (rubric.parent.name_hindi if rubric.parent else '').lower()
-                    if sub_part.lower() in rname or sub_part.lower() in rname_hindi:
-                        score += 100
-                    if main_part.lower() in pname or main_part.lower() in pname_hindi:
-                        score += 50
-                    scored.append((score, rubric))
-
-                # Sort by score descending, then by name length
-                scored.sort(key=lambda x: (-x[0], len(x[1].name or '')))
-                
-                # Check for exact path match (sub_part == name and main_part == parent)
-                exact_matches = [r for s, r in scored if (sub_part.lower() == rname or sub_part.lower() == rname_hindi) and (main_part.lower() == pname or main_part.lower() == pname_hindi)]
-                if exact_matches:
-                    # Keep exact matches at the top, followed by others up to 7
-                    rubrics_list_raw = exact_matches + [r for _, r in scored if r not in exact_matches][:7 - len(exact_matches)]
-                else:
-                    rubrics_list_raw = [r for _, r in scored[:7]]
-
-                # Build response
-                return _build_rubric_response(rubrics_list_raw, identified_chapter=main_part)
-
-        # ─────────────────────────────────────────────────────────────────────
-        # 4. DETECT BODY PART IN QUERY
-        # ─────────────────────────────────────────────────────────────────────
-        detected_chapter = None
+        detected_chapters = []
         symptom_words = []  # words that are NOT the body part
 
         for word in search_words:
             chapter = BODY_PART_MAP.get(word)
-            if chapter and not detected_chapter:
-                detected_chapter = chapter
+            if chapter:
+                if chapter not in detected_chapters:
+                    detected_chapters.append(chapter)
             else:
                 symptom_words.append(word)
 
         # Track if we have actual symptom words beyond the body part
         has_symptom_words = bool(symptom_words)
+        detected_chapter = detected_chapters[0] if detected_chapters else None
 
         # For scoring: use all search words
         scoring_words = search_words
@@ -4842,43 +4772,46 @@ def intelligent_rubric_search(request):
         # 5. BUILD DB FILTER — NO modality JOINs (prevents fan-out)
         #    Only use name / synonym tables in the filter
         # ─────────────────────────────────────────────────────────────────────
-        base_qs = Rubric.objects.filter(is_active=True).select_related(
+        base_qs = Rubric.objects.filter(is_active=True).exclude(name__in=['', '""']).select_related(
             'parent', 'parent__parent', 'parent__parent__parent'
         ).annotate(
             med_count=Count('medicine_grades', distinct=True)
         )
 
-        if detected_chapter:
+        if detected_chapters and len(detected_chapters) == 1:
             # Restrict to the detected chapter (parent name match)
+            ch = detected_chapters[0]
             chapter_filter = (
-                Q(parent__name__icontains=detected_chapter) |
-                Q(parent__parent__name__icontains=detected_chapter) |
-                Q(parent__parent__parent__name__icontains=detected_chapter) |
-                Q(name__icontains=detected_chapter)
+                Q(parent__name__icontains=ch) |
+                Q(parent__parent__name__icontains=ch) |
+                Q(parent__parent__parent__name__icontains=ch) |
+                Q(name__icontains=ch)
             )
             base_qs = base_qs.filter(chapter_filter)
+        elif detected_chapters and len(detected_chapters) > 1:
+            # If multiple chapters, don't filter by chapter but ensure they are searched
+            pass
 
-            if not has_symptom_words and len(search_words) > 0:
-                symptom_words = search_words
-                has_symptom_words = True
+        if not has_symptom_words and len(search_words) > 0:
+            symptom_words = search_words
+            has_symptom_words = True
 
-            if has_symptom_words:
-                # Also filter by remaining symptom keywords (in name or synonym)
-                symptom_q = Q()
-                for word in symptom_words:
-                    # Basic stemming/typo tolerance: strip last 1-2 chars for long words
-                    search_term = word[:-2] if len(word) > 6 else word
-                    word_q = (
-                        Q(name__icontains=search_term) |
-                        Q(name_hindi__icontains=search_term) |
-                        Q(parent__name__icontains=search_term) |
-                        Q(parent__parent__name__icontains=search_term) |
-                        Q(synonyms__synonym__icontains=search_term) |
-                        Q(modalities__name__icontains=search_term)
-                    )
-                    symptom_q |= word_q
-                # Apply symptom filter; use OR logic for candidates, Python will rank the best matches
-                base_qs = base_qs.filter(symptom_q)
+        if has_symptom_words:
+            # Also filter by remaining symptom keywords (in name or synonym)
+            symptom_q = Q()
+            for word in symptom_words:
+                word_lower = word.lower()
+                word_q = (
+                    Q(name__icontains=word_lower) |
+                    Q(name_hindi__icontains=word_lower) |
+                    Q(parent__name__icontains=word_lower) |
+                    Q(parent__parent__name__icontains=word_lower) |
+                    Q(synonyms__synonym__icontains=word_lower) |
+                    Q(modalities__name__icontains=word_lower)
+                )
+                symptom_q |= word_q
+            # Apply symptom filter; use OR logic for candidates, Python will rank the best matches
+            base_qs = base_qs.filter(symptom_q)
         else:
             # No body-part detected: broad search across all chapters
             combined_q = Q()
@@ -4895,8 +4828,8 @@ def intelligent_rubric_search(request):
                 combined_q = word_q if not combined_q else combined_q | word_q
             base_qs = base_qs.filter(combined_q)
 
-        # Fetch more candidates for flexible OR matching (Python will sort them)
-        rubrics_candidates = list(base_qs.distinct().prefetch_related('synonyms', 'modalities')[:100])
+        # Fetch candidates for flexible OR matching (limited to 2000 for server stability)
+        rubrics_candidates = list(base_qs.distinct().prefetch_related('synonyms', 'modalities')[:2000])
 
         # ─────────────────────────────────────────────────────────────────────
         # 6. PYTHON-SIDE SCORING
@@ -4909,13 +4842,19 @@ def intelligent_rubric_search(request):
             t = re.sub(r'[^\w\s\u0900-\u097F]', ' ', str(text).lower())
             return " ".join(t.split())
 
-        def score_rubric(rubric, words, chapter, full_query):
+        def score_rubric(rubric, words, chapters, full_query):
             score = 0
             rname = (rubric.name or '').lower()
             rname_h = (rubric.name_hindi or '').lower()
             pname = (rubric.parent.name if rubric.parent else '').lower()
-            synonyms_text = ' '.join(s.synonym.lower() for s in rubric.synonyms.all())
-            modalities_text = ' '.join(m.name.lower() for m in rubric.modalities.all())
+            
+            # Use pre-fetched synonyms and modalities if possible
+            try:
+                synonyms_text = ' '.join(s.synonym.lower() for s in rubric.synonyms.all())
+                modalities_text = ' '.join(m.name.lower() for m in rubric.modalities.all())
+            except Exception:
+                synonyms_text = ""
+                modalities_text = ""
 
             # Cleaned versions for exact matching
             c_fq = clean_for_match(full_query)
@@ -4923,30 +4862,40 @@ def intelligent_rubric_search(request):
             c_rname_h = clean_for_match(rubric.name_hindi)
             c_sw_joined = clean_for_match(" ".join(symptom_words))
 
-            # 1. Full query exact match (cleaned)
-            if c_fq and (c_fq == c_rname or c_fq == c_rname_h):
-                score += 2000
+
 
             # 2. Chapter-aware exact match (cleaned)
-            if chapter and chapter.lower() == pname.lower():
+            if chapters and any(ch.lower() == pname.lower() for ch in chapters):
                 if c_sw_joined and (c_sw_joined == c_rname or c_sw_joined == c_rname_h):
                     score += 2000
 
+            name_match_count = 0
             for word in words:
-                search_term = word[:-2] if len(word) > 6 else word
+                word_lower = word.lower()
                 # Name match — very high
-                if search_term in rname or search_term in rname_h:
-                    score += 100 
+                if word_lower in rname or word_lower in rname_h:
+                    score += 100
+                    name_match_count += 1
                 # Modality match — high
-                if search_term in modalities_text:
-                    score += 50 
+                if word_lower in modalities_text:
+                    score += 50
                 # Synonym match — medium
-                if search_term in synonyms_text:
-                    score += 30 
+                if word_lower in synonyms_text:
+                    score += 30
 
-            # Correct chapter bonus
-            if chapter and chapter.lower() in pname:
-                score += 50
+            # Multi-word co-occurrence bonus: big boost when ALL keywords appear in rubric name
+            # This ensures "Headache – with vertigo" ranks above single-keyword matches
+            if len(words) > 1 and name_match_count == len(words):
+                score += 500  # All words present in name — very strong signal
+            elif len(words) > 1 and name_match_count >= len(words) - 1:
+                score += 150  # All-but-one words present
+
+            # Correct chapter bonus: boost if it matches ANY of the detected chapters
+            if chapters:
+                for ch in chapters:
+                    if ch.lower() in pname:
+                        score += 50
+                        break
 
             # Penalty for longer names to prioritize the more "specific" (shortest) match
             score -= len(rname) * 0.01
@@ -4955,17 +4904,21 @@ def intelligent_rubric_search(request):
 
         scored_rubrics = []
         for rubric in rubrics_candidates:
-            s = score_rubric(rubric, search_words, detected_chapter, query)
+            s = score_rubric(rubric, search_words, detected_chapters, query)
             scored_rubrics.append((s, rubric))
 
         # Sort by score descending, then by name length (shorter is better)
         scored_rubrics.sort(key=lambda x: (-x[0], len(x[1].name or '')))
         
+        # Attach scores for the response
+        for s, r in scored_rubrics:
+            r.search_score = s
+
         # If we have an exact match (score >= 2000), we could return just that,
         # but the user requested numbered options (1, 2, 3) for symptom searches.
         # So we return the top 7, with the exact match at the top.
-        # Increase to 50 results to show a better spread across chapters
-        top_rubrics = [r for _, r in scored_rubrics[:50]]
+        # Return all scored candidates (previously limited to 50)
+        top_rubrics = [r for _, r in scored_rubrics]
 
         return _build_rubric_response(top_rubrics, identified_chapter=detected_chapter)
 
@@ -5038,6 +4991,7 @@ def _build_rubric_response(rubrics, identified_chapter=None):
             },
             'medicines': medicines_list,
             'category': category,
+            'score': getattr(rubric, 'search_score', 0),
         }
         rubric_list.append(r_data)
 
@@ -8385,7 +8339,7 @@ def doctor_rubric_repertorize(request):
 
     try:
         # ── Step 1: Build search queryset ─────────────────────────────────────
-        base_qs = Rubric.objects.filter(is_active=True).prefetch_related(
+        base_qs = Rubric.objects.filter(is_active=True).exclude(name__in=['', '""']).prefetch_related(
             'synonyms', 'modalities', 'medicine_grades', 'medicine_grades__medicine'
         ).select_related('parent')
 
@@ -8780,7 +8734,30 @@ def doctor_rubric_repertorize(request):
                 )
 
             # Fetch candidates
-            candidate_ids = set(base_qs.filter(q).values_list('id', flat=True)[:3000])
+            # Fetch candidates with a larger limit to ensure we don't miss relevant matches
+            # but order by name-match probability if possible.
+            # For now, we just increase the limit and prioritize name matches.
+            name_q = Q()
+            for tok in all_search_tokens:
+                name_q |= Q(name__icontains=tok) | Q(name_hindi__icontains=tok)
+            
+            # Try name matches first (limit to 2000 for stability)
+            candidate_ids = list(base_qs.filter(name_q).values_list('id', flat=True)[:2000])
+            
+            # If not enough, add synonym/modality matches
+            if len(candidate_ids) < 2000:
+                other_q = Q()
+                for tok in all_search_tokens:
+                    other_q |= (
+                        Q(synonyms__synonym__icontains=tok) |
+                        Q(synonyms__synonym_hindi__icontains=tok) |
+                        Q(modalities__name__icontains=tok) |
+                        Q(modalities__name_hindi__icontains=tok)
+                    )
+                # Exclude ones already found
+                extra_ids = base_qs.filter(other_q).exclude(id__in=candidate_ids).values_list('id', flat=True)[:2000]
+                candidate_ids.extend(list(extra_ids))
+
             if not candidate_ids:
                 symptoms_breakdown.append({
                     'symptom': sym_str,
@@ -8854,13 +8831,20 @@ def doctor_rubric_repertorize(request):
 
                 # Apply main scores cumulatively
                 if name_matched_tokens:
-                    score += 50 * len(name_matched_tokens)
+                    # Give higher weight to name matches
+                    score += 100 * len(name_matched_tokens)
+                    
+                    # Extra bonus for matching multiple symptom concepts
+                    # (e.g. "headache" and "vertigo")
+                    if len(name_matched_tokens) > 1:
+                        score += 200
+                        
                     matched_fields.append('name')
                 if modality_matched_tokens:
-                    score += 30 * len(modality_matched_tokens)
+                    score += 20 * len(modality_matched_tokens)
                     matched_fields.append('modality')
                 if synonym_matched_tokens:
-                    score += 20 * len(synonym_matched_tokens)
+                    score += 15 * len(synonym_matched_tokens)
                     matched_fields.append('synonym')
                 
                 if not matched_fields:
@@ -8915,7 +8899,7 @@ def doctor_rubric_repertorize(request):
                 # Sort by score descending, then by name length (shorter is more specific)
                 scored_candidates.sort(key=lambda x: (-x['score'], len(x['rubric']['name'])))
                 
-                # Always return ONLY ONE specific rubric per symptom
+                # Restore the limit: for clinical analysis, we want the most specific rubric match per symptom part
                 top_for_sym = [scored_candidates[0]]
 
                 # Only include rubrics that have at least some clinical data
@@ -8994,7 +8978,7 @@ def doctor_rubric_repertorize(request):
                  'matched_symptoms': item['matched_symptoms'],
                  'matched_field':    ", ".join(item['rubric'].get('matched_fields', [])),
                  'medicines':        item['medicines']}
-                for item in top_rubrics[:7]
+                for item in top_rubrics[:10]
             ],
             'medicine_chart': medicine_chart,
         })
