@@ -4668,30 +4668,59 @@ def intelligent_rubric_search(request):
             'head': 'Head',
             'mind': 'Mind',
             'mental': 'Mind',
+            'grief': 'Mind',
+            'anger': 'Mind',
+            'anxiety': 'Mind',
+            'fear': 'Mind',
+            'depression': 'Mind',
+            'sadness': 'Mind',
             'eye': 'Eyes',
             'eyes': 'Eyes',
             'ear': 'Ears',
             'ears': 'Ears',
             'nose': 'Nose',
+            'nasal': 'Nose',
             'throat': 'Throat',
+            'tonsil': 'Throat',
+            'tonsils': 'Throat',
             'stomach': 'Stomach',
+            'nausea': 'Stomach',
+            'vomiting': 'Stomach',
+            'vomit': 'Stomach',
+            'indigestion': 'Stomach',
+            'belching': 'Stomach',
+            'burping': 'Stomach',
+            'heartburn': 'Stomach',
+            'appetite': 'Stomach',
+            'fasting': 'Stomach',
+            'hunger': 'Stomach',
+            'thirst': 'Stomach',
             'abdomen': 'Abdomen',
             'abdominal': 'Abdomen',
+            'bloating': 'Abdomen',
+            'flatulence': 'Abdomen',
+            'gas': 'Abdomen',
             'gastric': 'Stomach',
+            'diarrhoea': 'Rectum',
+            'diarrhea': 'Rectum',
+            'constipation': 'Rectum',
             'rectum': 'Rectum',
+            'rectal': 'Rectum',
             'face': 'Face',
             'back': 'Back',
             'heart': 'Heart',
+            'chest': 'Chest',
             'skin': 'Skin',
             'hands': 'Extremities',
             'legs': 'Extremities',
             'extremities': 'Extremities',
             'knee': 'Extremities',
             'shoulder': 'Extremities',
+            'joint': 'Extremities',
+            'joints': 'Extremities',
             'generalities': 'Generalities',
             'weakness': 'Generalities',
             'fatigue': 'Generalities',
-            'pain': 'Generalities',
             'fever': 'Generalities',
             'sleep': 'Generalities',
             'urine': 'Urine',
@@ -4737,7 +4766,8 @@ def intelligent_rubric_search(request):
                     Q(parent__name_hindi__icontains=chapter_query) |
                     Q(parent__parent__name__icontains=chapter_query) |
                     Q(parent__parent__parent__name__icontains=chapter_query) |
-                    Q(name__icontains=chapter_query)
+                    Q(name__icontains=chapter_query) |
+                    Q(name_hindi__icontains=chapter_query)
                 )
                 
                 # Apply word-by-word symptom filter (checks rubric name and parent names)
@@ -4749,7 +4779,9 @@ def intelligent_rubric_search(request):
                         Q(parent__name__icontains=word) |
                         Q(parent__parent__name__icontains=word) |
                         Q(synonyms__synonym__icontains=word) |
-                        Q(modalities__name__icontains=word)
+                        Q(synonyms__synonym_hindi__icontains=word) |
+                        Q(modalities__name__icontains=word) |
+                        Q(modalities__name_hindi__icontains=word)
                     )
 
                 rubrics_qs = rubrics_qs.distinct().select_related(
@@ -4764,10 +4796,12 @@ def intelligent_rubric_search(request):
                 for rubric in rubrics_list_raw:
                     score = 0
                     rname = (rubric.name or '').lower()
+                    rname_hindi = (rubric.name_hindi or '').lower()
                     pname = (rubric.parent.name if rubric.parent else '').lower()
-                    if sub_part.lower() in rname:
+                    pname_hindi = (rubric.parent.name_hindi if rubric.parent else '').lower()
+                    if sub_part.lower() in rname or sub_part.lower() in rname_hindi:
                         score += 100
-                    if main_part.lower() in pname:
+                    if main_part.lower() in pname or main_part.lower() in pname_hindi:
                         score += 50
                     scored.append((score, rubric))
 
@@ -4775,7 +4809,7 @@ def intelligent_rubric_search(request):
                 scored.sort(key=lambda x: (-x[0], len(x[1].name or '')))
                 
                 # Check for exact path match (sub_part == name and main_part == parent)
-                exact_matches = [r for s, r in scored if sub_part.lower() == (r.name or '').lower() and main_part.lower() == (r.parent.name if r.parent else '').lower()]
+                exact_matches = [r for s, r in scored if (sub_part.lower() == rname or sub_part.lower() == rname_hindi) and (main_part.lower() == pname or main_part.lower() == pname_hindi)]
                 if exact_matches:
                     # Keep exact matches at the top, followed by others up to 7
                     rubrics_list_raw = exact_matches + [r for _, r in scored if r not in exact_matches][:7 - len(exact_matches)]
@@ -8446,6 +8480,7 @@ def doctor_rubric_repertorize(request):
             'उदासी':        ['sad', 'sadness', 'depression', 'melancholy', 'gloom', 'gloominess', 'despondency', 'dejection', 'cheerless'],
             'दुखी':         ['sad', 'sadness', 'sorrow', 'melancholy', 'dejected', 'despondent', 'unhappy'],
             'दुख':          ['sad', 'grief', 'sorrow', 'distress', 'misery'],
+            'शोक':          ['grief', 'sorrow', 'mourning', 'sad', 'sadness'],
             'निराश':        ['hopeless', 'hopelessness', 'despair', 'despondency', 'discouraged'],
             'निराशा':       ['hopeless', 'despair', 'despondency', 'hopelessness'],
             'टॉन्सिल':      ['tonsil', 'tonsils', 'tonsillitis'],
