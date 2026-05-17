@@ -4778,19 +4778,9 @@ def intelligent_rubric_search(request):
             med_count=Count('medicine_grades', distinct=True)
         )
 
-        if detected_chapters and len(detected_chapters) == 1:
-            # Restrict to the detected chapter (parent name match)
-            ch = detected_chapters[0]
-            chapter_filter = (
-                Q(parent__name__icontains=ch) |
-                Q(parent__parent__name__icontains=ch) |
-                Q(parent__parent__parent__name__icontains=ch) |
-                Q(name__icontains=ch)
-            )
-            base_qs = base_qs.filter(chapter_filter)
-        elif detected_chapters and len(detected_chapters) > 1:
-            # If multiple chapters, don't filter by chapter but ensure they are searched
-            pass
+        # Removed strict chapter filtering to allow finding symptoms in other chapters
+        # (e.g. "urination" rubrics might be in SIDES or Red Line chapters)
+        pass
 
         if not has_symptom_words and len(search_words) > 0:
             symptom_words = search_words
@@ -4809,8 +4799,11 @@ def intelligent_rubric_search(request):
                     Q(synonyms__synonym__icontains=word_lower) |
                     Q(modalities__name__icontains=word_lower)
                 )
-                symptom_q |= word_q
-            # Apply symptom filter; use OR logic for candidates, Python will rank the best matches
+                if not symptom_q:
+                    symptom_q = word_q
+                else:
+                    symptom_q &= word_q
+            # Apply symptom filter; use AND logic for candidates to narrow down results
             base_qs = base_qs.filter(symptom_q)
         else:
             # No body-part detected: broad search across all chapters
@@ -4860,9 +4853,22 @@ def intelligent_rubric_search(request):
             c_fq = clean_for_match(full_query)
             c_rname = clean_for_match(rubric.name)
             c_rname_h = clean_for_match(rubric.name_hindi)
+            
+            full_path_str = rubric.get_full_path()
+            c_fullpath = clean_for_match(full_path_str)
+            
+            path_parts = full_path_str.split(' > ')
+            if len(path_parts) >= 2 and path_parts[0].lower() == path_parts[1].lower():
+                stripped_fullpath = ' > '.join(path_parts[1:])
+            else:
+                stripped_fullpath = full_path_str
+            c_stripped_fullpath = clean_for_match(stripped_fullpath)
+            
             c_sw_joined = clean_for_match(" ".join(symptom_words))
 
-
+            # 1. Global exact match (highest priority)
+            if c_fq and (c_fq == c_fullpath or c_fq == c_stripped_fullpath or c_fq == c_rname or c_fq == c_rname_h):
+                score += 5000
 
             # 2. Chapter-aware exact match (cleaned)
             if chapters and any(ch.lower() == pname.lower() for ch in chapters):
@@ -4914,11 +4920,12 @@ def intelligent_rubric_search(request):
         for s, r in scored_rubrics:
             r.search_score = s
 
-        # If we have an exact match (score >= 2000), we could return just that,
-        # but the user requested numbered options (1, 2, 3) for symptom searches.
-        # So we return the top 7, with the exact match at the top.
-        # Return all scored candidates (previously limited to 50)
-        top_rubrics = [r for _, r in scored_rubrics]
+        # If we have a global exact match (score >= 5000), return ONLY that one.
+        # But only if it has medicines! Otherwise we want to show other results too.
+        if scored_rubrics and scored_rubrics[0][0] >= 5000 and getattr(scored_rubrics[0][1], 'med_count', 0) > 0:
+            top_rubrics = [scored_rubrics[0][1]]
+        else:
+            top_rubrics = [r for _, r in scored_rubrics]
 
         return _build_rubric_response(top_rubrics, identified_chapter=detected_chapter)
 
@@ -4974,12 +4981,17 @@ def _build_rubric_response(rubrics, identified_chapter=None):
         if not identified_chapter and category:
             identified_chapter = category
             
+        full_path_str = rubric.get_full_path()
+        path_parts = full_path_str.split(' > ')
+        if len(path_parts) > 1 and path_parts[0].strip().lower() == chapter_name.strip().lower():
+            full_path_str = ' > '.join(path_parts[1:])
+
         r_data = {
             'id': rubric.id,
             'name': rubric.name,
             'name_hindi': rubric.name_hindi,
             'description': rubric.description,
-            'full_path': rubric.get_full_path(),
+            'full_path': full_path_str,
             'level': rubric.level,
             'parent_name': rubric.parent.name if rubric.parent else None,
             'chapter_name': chapter_name,
@@ -8309,12 +8321,22 @@ def doctor_rubric_repertorize(request):
     split_regex = '|'.join(conjunctions)
     
     for sym in symptoms_raw:
-        # Split by conjunctions
-        parts = re.split(split_regex, str(sym), flags=re.IGNORECASE)
-        for p in parts:
-            p_strip = p.strip()
-            if len(p_strip) > 2:
-                all_sub_symptoms.append(p_strip)
+        sym_str = str(sym).strip()
+        
+        # If the symptom is exactly a rubric name, do not split it by conjunctions
+        exact_match = Rubric.objects.filter(name__iexact=sym_str).exists() or \
+                      Rubric.objects.filter(name__iexact=sym_str.replace('–', '-')).exists() or \
+                      Rubric.objects.filter(name__iexact=sym_str.replace('-', '–')).exists()
+                      
+        if exact_match:
+            all_sub_symptoms.append(sym_str)
+        else:
+            # Split by conjunctions
+            parts = re.split(split_regex, sym_str, flags=re.IGNORECASE)
+            for p in parts:
+                p_strip = p.strip()
+                if len(p_strip) > 2:
+                    all_sub_symptoms.append(p_strip)
     
     if not all_sub_symptoms and symptoms_raw:
         all_sub_symptoms = symptoms_raw
@@ -8873,6 +8895,11 @@ def doctor_rubric_repertorize(request):
                     ameliorations = [{'name': m.name, 'name_hindi': m.name_hindi} for m in all_mods if m.modality_type == 'amelioration']
                     synonyms_list = [s.synonym for s in all_syns if s.synonym]
 
+                    full_path_str = rubric.get_full_path()
+                    path_parts = full_path_str.split(' > ')
+                    if len(path_parts) > 1 and path_parts[0].strip().lower() == path_parts[1].strip().lower():
+                        full_path_str = ' > '.join(path_parts[1:])
+
                     scored_candidates.append({
                         'rubric': {
                             'id': rubric.id,
@@ -8880,7 +8907,7 @@ def doctor_rubric_repertorize(request):
                             'name_hindi': rubric.name_hindi,
                             'description': rubric.description,
                             'level': rubric.level,
-                            'full_path': rubric.get_full_path(),
+                            'full_path': full_path_str,
                             'parent_name': rubric.parent.name if rubric.parent else None,
                             'medicine_count': len(medicines),
                             'matched_fields': matched_fields,

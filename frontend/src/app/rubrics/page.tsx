@@ -794,9 +794,14 @@ export default function RubricsPage() {
                                 <p className="text-[8px] font-bold text-gray-400 uppercase mb-0.5">
                                   {item.chapter.name}
                                 </p>
-                                <p className="text-[10px] font-bold text-blue-700 leading-snug break-words">
+                                <p className="text-[10px] font-bold text-gray-900 leading-snug break-words">
                                   {item.rubric.full_path || item.rubric.name}
                                 </p>
+                                {item.rubric.name_hindi && (
+                                  <p className="text-[10px] text-gray-500 font-normal mt-0.5">
+                                    {item.rubric.name_hindi}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           ))}
