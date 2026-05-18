@@ -4862,15 +4862,22 @@ def intelligent_rubric_search(request):
                 stripped_fullpath = full_path_str
             c_stripped_fullpath = clean_for_match(stripped_fullpath)
             
+            c_fq_words = set(c_fq.split())
+            c_fullpath_words = set(c_fullpath.split())
+            c_stripped_words = set(c_stripped_fullpath.split())
+            
             c_sw_joined = clean_for_match(" ".join(symptom_words))
 
             # 1. Global exact match (highest priority)
             if c_fq and (c_fq == c_fullpath or c_fq == c_stripped_fullpath or c_fq == c_rname or c_fq == c_rname_h):
                 score += 5000
+            # 1.5 Word-set exact match (ignores word order like "Ribs, sore" vs "sore ribs")
+            elif c_fq_words and (c_fq_words == c_fullpath_words or c_fq_words == c_stripped_words):
+                score += 4500
 
             # 2. Chapter-aware exact match (cleaned)
             if chapters and any(ch.lower() == pname.lower() for ch in chapters):
-                if c_sw_joined and (c_sw_joined == c_rname or c_sw_joined == c_rname_h):
+                if c_sw_joined and (c_sw_joined == c_rname or c_sw_joined == c_rname_h or set(c_sw_joined.split()) == set(c_rname.split())):
                     score += 2000
 
             name_match_count = 0
@@ -4918,10 +4925,9 @@ def intelligent_rubric_search(request):
         for s, r in scored_rubrics:
             r.search_score = s
 
-        # If we have a global exact match (score >= 5000), return ONLY that one.
-        # But only if it has medicines! Otherwise we want to show other results too.
-        if scored_rubrics and scored_rubrics[0][0] >= 5000 and getattr(scored_rubrics[0][1], 'med_count', 0) > 0:
-            top_rubrics = [scored_rubrics[0][1]]
+        # If we have an exact match (score >= 4500), return ONLY those exact matches to avoid clutter.
+        if scored_rubrics and scored_rubrics[0][0] >= 4500:
+            top_rubrics = [r for s, r in scored_rubrics if s >= 4500]
         else:
             top_rubrics = [r for _, r in scored_rubrics]
 

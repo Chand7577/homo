@@ -174,6 +174,7 @@ export default function RubricsPage() {
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const globalInputContainerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const latestSearchRef = useRef<string>("");
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   // Probe cache: symptom string → identified root chapter name
   // Persists across analyses in the same session — avoids repeat API probes.
@@ -288,6 +289,8 @@ export default function RubricsPage() {
   }, []);
 
   const searchGlobalRubrics = async (q: string) => {
+    if (q.trim().length < 2) return;
+    latestSearchRef.current = q;
     setGlobalSearching(true);
     try {
       const res = await fetch(
@@ -295,11 +298,17 @@ export default function RubricsPage() {
         { credentials: "include" }
       );
       const data = await res.json();
-      setGlobalSearchChapters(data.chapters || []);
+      if (latestSearchRef.current === q) {
+        setGlobalSearchChapters(data.chapters || []);
+      }
     } catch {
-      setGlobalSearchChapters([]);
+      if (latestSearchRef.current === q) {
+        setGlobalSearchChapters([]);
+      }
     } finally {
-      setGlobalSearching(false);
+      if (latestSearchRef.current === q) {
+        setGlobalSearching(false);
+      }
     }
   };
 
