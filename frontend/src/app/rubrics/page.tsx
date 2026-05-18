@@ -745,7 +745,7 @@ export default function RubricsPage() {
                 }
 
                 return (
-                  <div className="flex-1 flex flex-col overflow-hidden p-2 md:p-6 h-full min-h-0">
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-2 md:p-6 h-full min-h-0 flex flex-col">
                     {/* Legend Section */}
                     <div className="mb-6 flex flex-wrap items-center justify-between gap-6 px-5 py-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 shadow-sm">
                       <div className="flex flex-wrap items-center gap-6">
@@ -765,7 +765,7 @@ export default function RubricsPage() {
                       </div>
                     </div>
 
-                    <div className="flex-1 flex flex-col lg:flex-row items-stretch gap-4 min-h-0 w-full overflow-hidden">
+                    <div className="flex flex-col lg:flex-row items-stretch gap-4 min-h-[500px] w-full shrink-0">
                       
                       {/* Box 1: Clinical Chapters */}
                       <div className="lg:w-[12%] flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden shrink-0 h-[200px] lg:h-auto">
@@ -869,6 +869,127 @@ export default function RubricsPage() {
                       </div>
 
                     </div>
+
+                    {/* Medicine Occurrence Chart */}
+                    {(() => {
+                      const maxOccurrence = Math.max(...sortedMeds.map(m => m.matchedRowNumbers.length), 1);
+
+                      if (sortedMeds.length === 0) return null;
+
+                      return (
+                        <div className="mt-6 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden shrink-0">
+                          {/* Chart Header */}
+                          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+                            <BookOpen className="w-5 h-5 text-slate-500" />
+                            <div>
+                              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+                                Medicine Occurrence Chart
+                              </h3>
+                              <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                Repetition count across {totalRows} selected rubrics
+                              </p>
+                            </div>
+                            <div className="ml-auto flex items-center gap-2 bg-white border border-slate-200 shadow-sm rounded-xl px-4 py-2">
+                              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                                {sortedMeds.length} Medicines
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Table Format */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse min-w-[400px]">
+                              <thead className="bg-slate-100 border-b border-slate-200">
+                                <tr>
+                                  <th className="px-6 py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest whitespace-nowrap">
+                                    Medicine
+                                  </th>
+                                  <th className="px-6 py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest text-center whitespace-nowrap w-32">
+                                    Occurrence
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {sortedMeds.map((med, idx) => {
+                                  const occurrence = med.matchedRowNumbers.length;
+                                  const barPct = Math.round((occurrence / maxOccurrence) * 100);
+                                  const isTop = idx === 0;
+                                  const isSecond = idx === 1;
+                                  const isThird = idx === 2;
+
+                                  const rankStyle = isTop
+                                    ? "bg-amber-500 text-white"
+                                    : isSecond
+                                    ? "bg-gray-300 text-gray-900"
+                                    : isThird
+                                    ? "bg-orange-500 text-white"
+                                    : "bg-indigo-100 text-indigo-700";
+
+                                  const barColor = isTop
+                                    ? "bg-amber-400"
+                                    : isSecond
+                                    ? "bg-slate-400"
+                                    : isThird
+                                    ? "bg-orange-400"
+                                    : "bg-indigo-300";
+
+                                  const badgeStyle = isTop
+                                    ? "bg-amber-100 text-amber-800 border-amber-200"
+                                    : isSecond
+                                    ? "bg-gray-100 text-gray-800 border-gray-200"
+                                    : isThird
+                                    ? "bg-orange-100 text-orange-800 border-orange-200"
+                                    : "bg-indigo-50 text-indigo-700 border-indigo-100";
+
+                                  return (
+                                    <tr
+                                      key={med.id}
+                                      className={`hover:bg-indigo-50/40 transition-all group ${
+                                        isTop ? "bg-amber-50/40" : isSecond ? "bg-gray-50/80" : ""
+                                      }`}
+                                    >
+                                      <td className="px-6 py-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                          <span
+                                            className={`w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-[10px] font-black shadow-sm ${rankStyle}`}
+                                          >
+                                            {idx + 1}
+                                          </span>
+                                          <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-bold text-gray-800 group-hover:text-indigo-700 truncate transition-colors">
+                                              {med.name}
+                                            </p>
+                                            <div className="mt-1 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden max-w-xs">
+                                              <div
+                                                className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                                style={{ width: `${barPct}%` }}
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-3 text-center">
+                                        <div className="flex justify-center">
+                                          <div
+                                            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl font-black text-sm shadow-sm border ${badgeStyle}`}
+                                          >
+                                            <span>{occurrence}</span>
+                                            <span className="text-[10px] font-bold opacity-60">
+                                              / {totalRows}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                   </div>
                 );
               })()}
