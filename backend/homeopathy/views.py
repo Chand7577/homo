@@ -2,7 +2,6 @@ import json
 import logging
 import secrets
 import string
-import pandas as pd
 import cloudinary.uploader
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -93,7 +92,6 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-import pandas as pd
 import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -111,7 +109,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.db import transaction
 from django.views.decorators.http import require_http_methods
-import tempfile, os, pandas as pd, logging
+import tempfile, os, logging
 from homeopathy.models import Rubric, Medicine, RubricMedicineGrade
 
 logger = logging.getLogger(__name__)
@@ -6896,6 +6894,7 @@ def process_excel_upload(file_path, batch_size=15):
     }
 
     try:
+        import pandas as pd
         excel_data = pd.read_excel(file_path, sheet_name=None)
         total_sheets = len(excel_data)
         
@@ -7111,6 +7110,7 @@ def download_rubric_template(request):
     
     try:
         import io
+        import pandas as pd
         from django.http import HttpResponse
         
         # Create sample data

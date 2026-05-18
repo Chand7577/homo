@@ -3,7 +3,7 @@ services:
     name: homeopathy-backend
     env: python
     buildCommand: ./build.sh
-    startCommand: gunicorn myproject.wsgi:application
+    startCommand: gunicorn -c gunicorn.conf.py myproject.wsgi:application
     rootDir: backend
     plan: free
     envVars:
