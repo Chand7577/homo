@@ -174,7 +174,7 @@ export default function RubricsPage() {
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const globalInputContainerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const latestSearchRef = useRef<string>("");
+  const searchAbortRef = useRef<AbortController | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   // Probe cache: symptom string → identified root chapter name
   // Persists across analyses in the same session — avoids repeat API probes.
@@ -290,23 +290,25 @@ export default function RubricsPage() {
 
   const searchGlobalRubrics = async (q: string) => {
     if (q.trim().length < 2) return;
-    latestSearchRef.current = q;
+    // Cancel any in-flight request before starting a new one
+    if (searchAbortRef.current) searchAbortRef.current.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
     setGlobalSearching(true);
     try {
       const res = await fetch(
         `${API_BASE}/doctor/rubrics/search/?query=${encodeURIComponent(q)}`,
-        { credentials: "include" }
+        { credentials: "include", signal: controller.signal }
       );
       const data = await res.json();
-      if (latestSearchRef.current === q) {
-        setGlobalSearchChapters(data.chapters || []);
-      }
-    } catch {
-      if (latestSearchRef.current === q) {
+      setGlobalSearchChapters(data.chapters || []);
+    } catch (err: any) {
+      // AbortError means a newer search superseded this one — ignore it
+      if (err?.name !== "AbortError") {
         setGlobalSearchChapters([]);
       }
     } finally {
-      if (latestSearchRef.current === q) {
+      if (searchAbortRef.current === controller) {
         setGlobalSearching(false);
       }
     }
