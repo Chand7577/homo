@@ -249,6 +249,8 @@ export default function RubricsPage() {
       setGlobalSearchChapters([]);
       setGlobalExpandedChapters(new Set());
       setDropdownPos(null);
+      // Abort any in-flight search when input is cleared
+      if (searchAbortRef.current) { searchAbortRef.current.abort(); searchAbortRef.current = null; }
       return;
     }
     // Calculate fixed position from the container's bounding rect
@@ -256,6 +258,8 @@ export default function RubricsPage() {
       const rect = globalInputContainerRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.bottom + 12, left: rect.left, width: rect.width });
     }
+    // Abort any in-flight request when a new keystroke arrives
+    if (searchAbortRef.current) { searchAbortRef.current.abort(); searchAbortRef.current = null; }
     const timer = setTimeout(() => {
       searchGlobalRubrics(globalInput);
       setGlobalExpandedChapters(new Set());
@@ -290,8 +294,7 @@ export default function RubricsPage() {
 
   const searchGlobalRubrics = async (q: string) => {
     if (q.trim().length < 2) return;
-    // Cancel any in-flight request before starting a new one
-    if (searchAbortRef.current) searchAbortRef.current.abort();
+    // Create a new AbortController for this specific request
     const controller = new AbortController();
     searchAbortRef.current = controller;
     setGlobalSearching(true);
@@ -300,13 +303,11 @@ export default function RubricsPage() {
         `${API_BASE}/doctor/rubrics/search/?query=${encodeURIComponent(q)}`,
         { credentials: "include", signal: controller.signal }
       );
-      // If a newer search already aborted this one, discard silently
       if (controller.signal.aborted) return;
       const data = await res.json();
       if (controller.signal.aborted) return;
       setGlobalSearchChapters(data.chapters || []);
     } catch (err: any) {
-      // Silently swallow AbortError — it just means a newer query started
       if (err?.name === "AbortError") return;
       setGlobalSearchChapters([]);
     } finally {
