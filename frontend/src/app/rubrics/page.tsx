@@ -300,13 +300,15 @@ export default function RubricsPage() {
         `${API_BASE}/doctor/rubrics/search/?query=${encodeURIComponent(q)}`,
         { credentials: "include", signal: controller.signal }
       );
+      // If a newer search already aborted this one, discard silently
+      if (controller.signal.aborted) return;
       const data = await res.json();
+      if (controller.signal.aborted) return;
       setGlobalSearchChapters(data.chapters || []);
     } catch (err: any) {
-      // AbortError means a newer search superseded this one — ignore it
-      if (err?.name !== "AbortError") {
-        setGlobalSearchChapters([]);
-      }
+      // Silently swallow AbortError — it just means a newer query started
+      if (err?.name === "AbortError") return;
+      setGlobalSearchChapters([]);
     } finally {
       if (searchAbortRef.current === controller) {
         setGlobalSearching(false);
