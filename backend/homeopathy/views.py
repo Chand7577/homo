@@ -4651,7 +4651,12 @@ def intelligent_rubric_search(request):
             'where', 'why', 'how', 'who', 'can', 'could', 'would', 'should',
             'will', 'very', 'much', 'too', 'lot', 'getting', 'got',
             'में', 'का', 'की', 'से', 'को', 'पर', 'और', 'है', 'हैं', 'था', 'थी', 'थे',
-            'वाला', 'वाली', 'वाले', 'के', 'लिए', 'करता', 'करती', 'करते'
+            'वाला', 'वाली', 'वाले', 'के', 'लिए', 'करता', 'करती', 'करते', 'होता', 'होती',
+            'होते', 'हुए', 'हुआ', 'हुई', 'कर', 'रहा', 'रही', 'रहे', 'गया', 'गई', 'गए',
+            'तक', 'भी', 'ही', 'या', 'तो', 'जो', 'जब', 'तब', 'कोई', 'कुछ', 'क्या',
+            'क्यों', 'कैसे', 'कहाँ', 'आता', 'आती', 'आते', 'लगता', 'लगती', 'लगते', 'हो',
+            'जाता', 'जाती', 'जाते', 'देता', 'देती', 'देते', 'रहता', 'रहती', 'रहते',
+            'सकता', 'सकती', 'सकते', 'चाहिए', 'लिया', 'दिया', 'दिए'
         }
         tokens = [t for t in re.split(r'[\s,।|.:;!\-?–—]+', query.lower()) if t]
         search_words = [w for w in tokens if len(w) >= 2 and w not in filler_words]
@@ -4913,9 +4918,14 @@ def intelligent_rubric_search(request):
 
             return score
 
+        # Build a clean query from filtered search_words only (strips filler/grammar words).
+        # Using the raw query would pollute c_fq with words like "है", "होती", "जाता"
+        # which don't appear in any rubric name and cause exact-match scoring to fail.
+        clean_query = " ".join(search_words)
+
         scored_rubrics = []
         for rubric in rubrics_candidates:
-            s = score_rubric(rubric, search_words, detected_chapters, query)
+            s = score_rubric(rubric, search_words, detected_chapters, clean_query)
             scored_rubrics.append((s, rubric))
 
         # Sort by score descending, then by name length (shorter is better)
