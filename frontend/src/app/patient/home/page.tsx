@@ -216,7 +216,11 @@ const PatientHome = () => {
     }
   };
 
-  // Fetch doctors when city or specialty changes
+  // Fetch all doctors on page load for suggestions; also re-fetch when moving to step 2
+  useEffect(() => {
+    fetchDoctors();
+  }, []);
+
   useEffect(() => {
     if (currentStep === 2 && selectedCity) {
       fetchDoctors();
@@ -336,10 +340,7 @@ const PatientHome = () => {
 Name: ${patientName}
 Phone: ${patientPhone}
 City: ${selectedCity}
-
-📋 Consultation For:
-${selectedSpecialty} - ${selectedSubSpecialty}
-${problemDescription ? `\nDetails: ${problemDescription}` : ""}
+${problemDescription ? `\n📝 Problem Description:\n${problemDescription}` : ""}
 
 📅 Preferred Schedule:
 Date: ${new Date(appointmentDate).toLocaleDateString("en-IN", {
@@ -402,6 +403,9 @@ Please confirm availability.
   const jpNautiyalDoctors = getDoctorsByClass("doctor_jp_nautiyal");
   const coreTeamDoctors = getDoctorsByClass("core_team");
   const individualDoctors = getDoctorsByClass("individual");
+  const otherDoctors = doctors.filter(
+    (d) => !["doctor_jp_nautiyal", "core_team", "individual"].includes(d.doctor_class)
+  );
 
   // Doctor Card Component
   const DoctorCard = ({ doctor, featured = false }) => {
@@ -718,31 +722,6 @@ Please confirm availability.
                 </div>
               </div>
 
-              {/* Specialty Selection */}
-              <div className="mb-6">
-                <label className="block text-sm font-bold text-gray-700 mb-3">
-                  What brings you here? *
-                </label>
-                <button
-                  onClick={() => setShowSpecialtyModal(true)}
-                  className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl text-left hover:border-[#3F856C] transition-all"
-                >
-                  {selectedSubSpecialty ? (
-                    <div>
-                      <p className="text-sm text-gray-600">
-                        {selectedSpecialty}
-                      </p>
-                      <p className="font-medium text-gray-900">
-                        {selectedSubSpecialty}
-                      </p>
-                    </div>
-                  ) : (
-                    <span className="text-gray-500">
-                      Select your health concern
-                    </span>
-                  )}
-                </button>
-              </div>
 
               {/* Optional Problem Description */}
               <div className="mb-6">
@@ -836,7 +815,7 @@ Please confirm availability.
               {/* Continue Button */}
               <button
                 onClick={() => setCurrentStep(2)}
-                disabled={!selectedCity || !selectedSubSpecialty}
+                disabled={!selectedCity}
                 className="w-full py-4 bg-gradient-to-r from-[#3F856C] to-[#35735E] text-white rounded-xl font-bold text-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
               >
                 <span>Find Doctors</span>
@@ -1182,10 +1161,29 @@ Please confirm availability.
                   </div>
                 )}
 
+                {/* Other / Uncategorised Doctors */}
+                {otherDoctors.length > 0 && (
+                  <div className="mb-12">
+                    <div className="flex items-center gap-3 mb-6">
+                      <Stethoscope className="w-5 h-5 md:w-6 md:h-6 text-teal-600" />
+                      <h2 className="text-xl md:text-2xl font-bold text-gray-900">
+                        Available Doctors
+                      </h2>
+                      <div className="flex-1 h-px bg-gradient-to-r from-teal-200 to-transparent" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                      {otherDoctors.map((doctor) => (
+                        <DoctorCard key={doctor.id} doctor={doctor} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* No Doctors */}
                 {jpNautiyalDoctors.length === 0 &&
                   coreTeamDoctors.length === 0 &&
-                  individualDoctors.length === 0 && (
+                  individualDoctors.length === 0 &&
+                  otherDoctors.length === 0 && (
                     <div className="bg-white rounded-3xl border-2 border-gray-100 p-16 text-center">
                       <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <h3 className="text-2xl font-bold text-gray-900 mb-3">

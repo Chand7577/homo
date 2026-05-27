@@ -9,7 +9,6 @@ import Sidebar from "@/components/Sidebar";
 import DoctorSidebar from "@/components/DoctorSidebar";
 import PatientSidebar from "@/components/PatientSidebar";
 import LoadingProvider from "@/components/LoadingProvider";
-import AI from "@/components/AI";
 import RoleModal from "@/components/RoleModal";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -180,7 +179,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {!isFullPage && renderSidebar()}
 
               <main className={`flex-1 ${!isFullPage ? "md:ml-64" : ""} pb-16 md:pb-0 overflow-y-auto transition-all duration-300`}>
-                <AI />
                 {children}
               </main>
             </div>

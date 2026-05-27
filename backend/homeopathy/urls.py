@@ -64,6 +64,7 @@ urlpatterns = [
     path('admin/stats/patients/', views.get_patients_stats, name='patients_stats'),
     path('admin/stats/rubrics/', views.get_rubrics_stats, name='rubrics_stats'),
     path('admin/stats/medicines/', views.get_medicines_stats, name='medicines_stats'),
+    path('admin/logs/', views.get_system_logs, name='get_system_logs'),
     
     path('doctor/login/', views.doctor_login, name='doctor_login'),
     path('doctor/logout/', views.doctor_logout, name='doctor_logout'),
@@ -222,6 +223,7 @@ urlpatterns = [
     path('patient/inbox/', views.get_patient_inbox, name='get_patient_inbox'),
     path('messages/<int:message_id>/thread/', views.get_message_thread, name='get_message_thread'),
     path('messages/<int:message_id>/mark-read/', views.mark_message_as_read, name='mark_message_as_read'),
+    path('messages/<int:message_id>/reply/', views.patient_reply_to_message, name='patient_reply_to_message'),
     
     # Doctor messaging
     path('doctor/inbox/', views.get_doctor_inbox, name='get_doctor_inbox'),

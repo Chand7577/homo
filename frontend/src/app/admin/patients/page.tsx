@@ -21,7 +21,7 @@ import {
 
 import PatientRegistrationModal from "@/components/PatientRegistrationModal";
 import PatientDetailModal from "@/components/PatientDetailModal";
-// import PatientEditModal from '@/components/PatientEditModal'; // You'll need to create this
+import PatientEditModal from "@/components/PatientEditModal";
 
 import { API_BASE } from "@/config";
 
@@ -53,6 +53,7 @@ const ManagePatients = () => {
   // Modal states
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -143,6 +144,11 @@ const ManagePatients = () => {
   const handleViewPatient = (patient: Patient) => {
     setSelectedPatient(patient);
     setShowDetailModal(true);
+  };
+
+  const handleEditPatient = (patient: Patient) => {
+    setSelectedPatient(patient);
+    setShowEditModal(true);
   };
 
   const handleDeleteClick = (patient: Patient) => {
@@ -398,6 +404,13 @@ const ManagePatients = () => {
                             <Eye className="w-4 h-4 text-gray-600" />
                           </button>
                           <button
+                            onClick={() => handleEditPatient(patient)}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4 text-gray-600" />
+                          </button>
+                          <button
                             onClick={() => handleDeleteClick(patient)}
                             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                             title="Delete"
@@ -436,6 +449,16 @@ const ManagePatients = () => {
           setShowDetailModal(false);
           setSelectedPatient(null);
         }}
+        patient={selectedPatient}
+      />
+
+      <PatientEditModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedPatient(null);
+        }}
+        onSuccess={fetchPatients}
         patient={selectedPatient}
       />
 

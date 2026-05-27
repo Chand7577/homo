@@ -26,7 +26,6 @@ const menuItems = [
   // { label: "Repertorization", path: "/repertorize", icon: ListChecks },
   { label: "Rubrics", path: "/rubrics", icon: ClipboardList },
   { label: "Medicines", path: "/medicines", icon: Pill },
-  { label: "Database", path: "/doctor-repertory", icon: ListChecks },
   { label: "Profile", path: "/doctorprofile", icon: User },
 ];
 

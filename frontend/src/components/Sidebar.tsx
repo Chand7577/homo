@@ -13,7 +13,8 @@ import {
   Database,
   User,
   LogOut,
-  UploadCloud
+  UploadCloud,
+  Activity
 } from "lucide-react";
 
 const menuItems = [
@@ -21,7 +22,7 @@ const menuItems = [
   { label: "Rubrics & Medicines", path: "/admin/repertory", icon: BookOpen },
   { label: "Manage Doctors", path: "/admin/doctors", icon: Stethoscope },
   { label: "Manage Patients", path: "/admin/patients", icon: Users },
-  { label: "Data Backup", path: "/admin/backup", icon: Database },
+  { label: "System Logs", path: "/admin/logs", icon: Activity },
   { label: "Import Data", path: "/admin/import", icon: UploadCloud },
   { label: "Profile", path: "/admin/profile", icon: User },
 ];

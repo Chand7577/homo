@@ -1017,6 +1017,10 @@ def doctor_verify_otp(request):
     request.session['doctor_name'] = doctor.user.get_full_name()
     request.session.save()
 
+    # Update last_login so it appears in system logs
+    doctor.user.last_login = timezone.now()
+    doctor.user.save(update_fields=['last_login'])
+
     return JsonResponse({
         'success': True,
         'message': 'Login successful',
@@ -3384,6 +3388,73 @@ def get_backup_stats(request):
     
     except Exception as e:
         logger.error(f"Error fetching backup stats: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+@csrf_exempt
+@require_admin
+def get_system_logs(request):
+    """Fetch logs of doctor logins, doctor creation, and prescriptions sent"""
+    if request.method != "GET":
+        return JsonResponse({'error': 'GET method required'}, status=405)
+        
+    try:
+        # 1. Doctor Logins (CustomUser who are doctors, with valid last_login)
+        logins = CustomUser.objects.filter(
+            user_type='doctor',
+            last_login__isnull=False
+        ).order_by('-last_login')[:100]
+        
+        login_logs = []
+        for user in logins:
+            login_logs.append({
+                'id': user.id,
+                'doctor_name': f"Dr. {user.get_full_name() or user.username}",
+                'email': user.email,
+                'login_time': user.last_login.isoformat() if user.last_login else None
+            })
+            
+        # 2. Doctors Created
+        doctors = Doctor.objects.select_related('user').order_by('-created_at')[:100]
+        creation_logs = []
+        for doc in doctors:
+            creation_logs.append({
+                'id': doc.id,
+                'doctor_name': f"Dr. {doc.user.get_full_name() or doc.user.username}",
+                'email': doc.user.email,
+                'specialization': doc.specialization,
+                'created_at': doc.created_at.isoformat() if doc.created_at else None
+            })
+            
+        # 3. Prescriptions Sent (Messages that contain 💊 PRESCRIPTION)
+        prescriptions = Message.objects.filter(
+            message__icontains='💊 PRESCRIPTION'
+        ).select_related('sender', 'doctor__user').order_by('-created_at')[:100]
+        
+        prescription_logs = []
+        for msg in prescriptions:
+            # Determine doctor name and patient name
+            doctor_name = f"Dr. {msg.sender.get_full_name() or msg.sender.username}" if msg.sender.user_type == 'doctor' else f"Dr. {msg.doctor.user.get_full_name() or msg.doctor.user.username}"
+            patient_name = msg.patient_name or (msg.parent_message.sender.get_full_name() if msg.parent_message else msg.sender.get_full_name())
+            
+            prescription_logs.append({
+                'id': msg.id,
+                'doctor_name': doctor_name,
+                'patient_name': patient_name,
+                'raw_content': msg.message,
+                'sent_at': msg.created_at.isoformat() if msg.created_at else None
+            })
+            
+        return JsonResponse({
+            'success': True,
+            'logins': login_logs,
+            'creations': creation_logs,
+            'prescriptions': prescription_logs
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching system logs: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -7850,36 +7921,41 @@ def get_message_thread(request, message_id):
         return JsonResponse({'error': 'Authentication required'}, status=401)
     
     try:
-        # Get user based on session type
-        if doctor_id:
-            try:
-                doctor = Doctor.objects.select_related('user').get(id=doctor_id)
-                current_user = doctor.user
-                is_doctor = True
-            except Doctor.DoesNotExist:
-                return JsonResponse({'error': 'Invalid session'}, status=401)
-        else:
-            try:
-                patient = Patient.objects.select_related('user').get(id=patient_id)
-                current_user = patient.user
-                is_doctor = False
-            except Patient.DoesNotExist:
-                return JsonResponse({'error': 'Invalid session'}, status=401)
-        
-        # Get the message
+        # Get the message first
         message = Message.objects.select_related(
             'doctor__user',
             'sender',
             'parent_message'
         ).get(id=message_id)
-        
-        # Check access - user must be sender or the doctor
-        if is_doctor:
-            if message.doctor.user != current_user:
-                return JsonResponse({'error': 'Access denied'}, status=403)
-        else:
-            if message.sender != current_user:
-                return JsonResponse({'error': 'Access denied'}, status=403)
+
+        has_access = False
+        is_doctor_view = False
+        current_user = None
+
+        if doctor_id:
+            try:
+                doctor = Doctor.objects.select_related('user').get(id=doctor_id)
+                if message.doctor.id == doctor.id:
+                    has_access = True
+                    is_doctor_view = True
+                    current_user = doctor.user
+            except Doctor.DoesNotExist:
+                pass
+
+        if not has_access and patient_id:
+            try:
+                patient = Patient.objects.select_related('user').get(id=patient_id)
+                if message.sender == patient.user:
+                    has_access = True
+                    is_doctor_view = False
+                    current_user = patient.user
+            except Patient.DoesNotExist:
+                pass
+
+        if not has_access:
+            return JsonResponse({'error': 'Access denied'}, status=403)
+            
+        is_doctor = is_doctor_view
         
         # Get the full thread
         thread_messages = message.get_thread()
@@ -8194,6 +8270,64 @@ def doctor_reply_to_message(request, message_id):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def patient_reply_to_message(request, message_id):
+    """
+    Patient replies to a doctor message in a thread.
+    POST /homeopathy/messages/<message_id>/reply/
+    Body: { "message": "..." }
+    """
+    patient_id = request.session.get('patient_id')
+    if not patient_id:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    try:
+        from .models import Patient
+        patient = Patient.objects.select_related('user').get(id=patient_id)
+    except Exception:
+        return JsonResponse({'error': 'Invalid session'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    try:
+        original_message = Message.objects.select_related('doctor').get(id=message_id)
+
+        reply_text = data.get('message', '').strip()
+        if not reply_text:
+            return JsonResponse({'error': 'Message is required'}, status=400)
+
+        reply = Message.objects.create(
+            sender=patient.user,
+            doctor=original_message.doctor,
+            message_type='reply',
+            message=reply_text,
+            parent_message=original_message,
+            patient_name=original_message.patient_name,
+            patient_phone=original_message.patient_phone,
+            status='pending',
+            is_read=False
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Reply sent successfully',
+            'data': {
+                'reply_id': reply.id,
+                'created_at': reply.created_at.isoformat(),
+            }
+        })
+
+    except Message.DoesNotExist:
+        return JsonResponse({'error': 'Message not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error sending patient reply: {str(e)}")
+        return JsonResponse({'error': 'Failed to send reply', 'detail': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def mark_message_as_read(request, message_id):
     """
     Mark a message as read
@@ -8207,32 +8341,32 @@ def mark_message_as_read(request, message_id):
         return JsonResponse({'error': 'Authentication required'}, status=401)
     
     try:
-        # Get user based on session type
+        # Get the message
+        message = Message.objects.get(id=message_id)
+
+        has_access = False
+        current_user = None
+
         if doctor_id:
             try:
                 doctor = Doctor.objects.select_related('user').get(id=doctor_id)
-                current_user = doctor.user
-                is_doctor = True
+                if message.doctor.id == doctor.id:
+                    has_access = True
+                    current_user = doctor.user
             except Doctor.DoesNotExist:
-                return JsonResponse({'error': 'Invalid session'}, status=401)
-        else:
+                pass
+
+        if not has_access and patient_id:
             try:
                 patient = Patient.objects.select_related('user').get(id=patient_id)
-                current_user = patient.user
-                is_doctor = False
+                if message.sender == patient.user:
+                    has_access = True
+                    current_user = patient.user
             except Patient.DoesNotExist:
-                return JsonResponse({'error': 'Invalid session'}, status=401)
-        
-        # Get the message
-        message = Message.objects.get(id=message_id)
-        
-        # Check access
-        if is_doctor:
-            if message.doctor.user != current_user:
-                return JsonResponse({'error': 'Access denied'}, status=403)
-        else:
-            if message.sender != current_user:
-                return JsonResponse({'error': 'Access denied'}, status=403)
+                pass
+
+        if not has_access:
+            return JsonResponse({'error': 'Access denied'}, status=403)
         
         # Mark as read
         message.mark_as_read()

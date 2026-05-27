@@ -237,6 +237,35 @@ const PatientInbox = () => {
     });
   };
 
+  // Check if doctor has replied or sent a prescription in this thread
+  const doctorHasReplied = messageThread.some(
+    (msg) => msg.sender?.user_type !== "patient"
+  );
+
+  // Send patient reply
+  const sendReply = async () => {
+    if (!replyText.trim() || !selectedMessage) return;
+    setSendingReply(true);
+    try {
+      const response = await fetch(
+        `${API_BASE}/messages/${selectedMessage.id}/reply/`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: replyText.trim() }),
+        }
+      );
+      if (!response.ok) throw new Error("Failed to send reply");
+      setReplyText("");
+      fetchMessageThread(selectedMessage.id);
+    } catch (err) {
+      console.error("Error sending reply:", err);
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <style>{`
@@ -746,17 +775,45 @@ const PatientInbox = () => {
                   )}
                 </div>
 
-                {/* Reply Input - Disabled */}
+                {/* Reply Input - conditional */}
                 <div className="p-4 border-t border-gray-100 bg-gray-50">
-                  <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
-                    <div className="flex items-center gap-3 text-gray-500">
-                      <AlertCircle className="w-5 h-5" />
-                      <p className="text-sm">
-                        The doctor will reply to your message via email or call
-                        you directly.
-                      </p>
+                  {doctorHasReplied ? (
+                    <div className="flex items-end gap-3">
+                      <textarea
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            sendReply();
+                          }
+                        }}
+                        placeholder="Type your reply..."
+                        rows={2}
+                        className="flex-1 resize-none bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#3F856C] transition-colors"
+                      />
+                      <button
+                        onClick={sendReply}
+                        disabled={sendingReply || !replyText.trim()}
+                        className="h-11 w-11 bg-[#3F856C] hover:bg-[#35735E] disabled:opacity-50 text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0"
+                      >
+                        {sendingReply ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Send className="w-5 h-5" />
+                        )}
+                      </button>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
+                      <div className="flex items-center gap-3 text-gray-500">
+                        <AlertCircle className="w-5 h-5" />
+                        <p className="text-sm">
+                          The doctor will reply to your message via email or call you directly.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -965,17 +1022,45 @@ const PatientInbox = () => {
               )}
             </div>
 
-            {/* Mobile Reply Info */}
+            {/* Mobile Reply Input - conditional */}
             <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
-              <div className="bg-gray-50 rounded-xl border-2 border-gray-200 p-3">
-                <div className="flex items-start gap-3 text-gray-600">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm leading-relaxed">
-                    The doctor will reply to your message via email or call you
-                    directly.
-                  </p>
+              {doctorHasReplied ? (
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendReply();
+                      }
+                    }}
+                    placeholder="Type your reply..."
+                    rows={2}
+                    className="flex-1 resize-none bg-gray-50 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[#3F856C] transition-colors"
+                  />
+                  <button
+                    onClick={sendReply}
+                    disabled={sendingReply || !replyText.trim()}
+                    className="h-10 w-10 bg-[#3F856C] hover:bg-[#35735E] disabled:opacity-50 text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0"
+                  >
+                    {sendingReply ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl border-2 border-gray-200 p-3">
+                  <div className="flex items-start gap-3 text-gray-600">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm leading-relaxed">
+                      The doctor will reply to your message via email or call you directly.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>

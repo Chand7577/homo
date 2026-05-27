@@ -2,6 +2,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import {
   BookOpen, Search, Plus, X, Pill, Sparkles, ChevronRight,
   ChevronDown, Tag, Loader2, BarChart3, Trophy, AlertCircle,
@@ -132,6 +134,7 @@ const GRADE_COLORS = ["", "bg-slate-100 text-slate-600", "bg-blue-100 text-blue-
   "bg-teal-100 text-teal-700", "bg-violet-100 text-violet-800", "bg-amber-100 text-amber-700"];
 
 export default function RubricsPage() {
+  const router = useRouter();
   const [stage, setStage] = useState<"selection" | "analysis">("selection");
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedChapters, setSelectedChapters] = useState<Chapter[]>([]);
@@ -170,6 +173,19 @@ export default function RubricsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   
+  // Prescription State
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [prescriptionData, setPrescriptionData] = useState({
+    message_id: "",
+    patient_id: "",
+    patient_name: "",
+    medicine: "",
+    description: "",
+    duration: ""
+  });
+  const [savingPrescription, setSavingPrescription] = useState(false);
+  const [patients, setPatients] = useState<{id: string, patient_name: string}[]>([]);
+
   const recognitionRef = useRef<any>(null);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const globalInputContainerRef = useRef<HTMLDivElement>(null);
@@ -191,6 +207,17 @@ export default function RubricsPage() {
       })
       .catch(() => setError("Failed to load chapters"))
       .finally(() => setChapterLoading(false));
+
+    // Fetch patients for prescription
+    fetch(`${API_BASE}/doctor/inbox/?limit=100`, { credentials: "include" })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.messages) {
+          const unique = [...new Map(d.messages.map((m: any) => [m.patient_name, m])).values()];
+          setPatients(unique as any);
+        }
+      })
+      .catch(e => console.error(e));
       
     if (typeof window !== "undefined") {
       const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -356,6 +383,60 @@ export default function RubricsPage() {
       } catch (e) {
         console.error(e);
       }
+    }
+  };
+
+  const handleSavePrescription = async () => {
+    if (!prescriptionData.message_id || !prescriptionData.medicine || !prescriptionData.description) {
+      alert("Please select a patient and fill all required fields for prescription.");
+      return;
+    }
+    setSavingPrescription(true);
+    try {
+      // Format prescription as a structured message
+      const prescriptionMessage = `
+💊 PRESCRIPTION
+${'─'.repeat(40)}
+👤 Patient: ${prescriptionData.patient_name}
+
+🩺 Medicine:
+${prescriptionData.medicine}
+
+📋 Instructions:
+${prescriptionData.description}
+
+⏱ Duration:
+${prescriptionData.duration || 'As advised'}
+${'─'.repeat(40)}
+✅ Prescribed by your doctor. Please follow the dosage instructions carefully.
+      `.trim();
+
+      const response = await fetch(
+        `${API_BASE}/doctor/messages/${prescriptionData.message_id}/reply/`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: prescriptionMessage,
+            status: "replied",
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to send prescription");
+
+      alert(`Prescription successfully sent to ${prescriptionData.patient_name}! Redirecting to inbox...`);
+      setShowPrescriptionModal(false);
+      setPrescriptionData({ message_id: "", patient_id: "", patient_name: "", medicine: "", description: "", duration: "" });
+      
+      // Redirect doctor to inbox
+      router.push("/doctorinbox");
+    } catch (e) {
+      alert("Error sending prescription. Please try again.");
+      console.error(e);
+    } finally {
+      setSavingPrescription(false);
     }
   };
 
@@ -662,13 +743,22 @@ export default function RubricsPage() {
               ANALYZE
             </button>
             {isAnalysisModalOpen && (
-              <button 
-                onClick={() => setIsAnalysisModalOpen(false)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
-              >
-                <X className="w-4 h-4 text-red-500" />
-                CLOSE
-              </button>
+              <>
+                <button 
+                  onClick={() => setShowPrescriptionModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition-all active:scale-95 shadow-sm"
+                >
+                  <Pill className="w-4 h-4" />
+                  WRITE PRESCRIPTION
+                </button>
+                <button 
+                  onClick={() => setIsAnalysisModalOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
+                >
+                  <X className="w-4 h-4 text-red-500" />
+                  CLOSE
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -1308,6 +1398,96 @@ export default function RubricsPage() {
             {successMessage}
           </div>
         </div>
+      )}
+
+      {/* PRESCRIPTION MODAL */}
+      {showPrescriptionModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 sm:p-6 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden animate-slide-up relative">
+            <div className="px-6 py-4 border-b border-slate-100 bg-indigo-600 flex items-center justify-between">
+              <div className="flex items-center gap-3 text-white">
+                <Pill className="w-5 h-5" />
+                <h2 className="text-sm font-black uppercase tracking-widest">New Prescription</h2>
+              </div>
+              <button 
+                onClick={() => setShowPrescriptionModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/20 text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Select Patient</label>
+                <select
+                  value={prescriptionData.message_id}
+                  onChange={(e) => {
+                    const selectedMsg = patients.find(p => String(p.id) === e.target.value);
+                    setPrescriptionData({
+                      ...prescriptionData,
+                      message_id: e.target.value,
+                      patient_id: e.target.value,
+                      patient_name: selectedMsg?.patient_name || "",
+                    });
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                >
+                  <option value="">-- Choose Patient --</option>
+                  {patients.map((p) => (
+                    <option key={p.id} value={String(p.id)}>{p.patient_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Medicine</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Paracetamol 500mg"
+                  value={prescriptionData.medicine}
+                  onChange={(e) => setPrescriptionData({...prescriptionData, medicine: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Duration</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 5 Days"
+                  value={prescriptionData.duration}
+                  onChange={(e) => setPrescriptionData({...prescriptionData, duration: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Prescription Description / Notes</label>
+                <textarea
+                  rows={3}
+                  placeholder="Take 1 tablet after meals twice a day..."
+                  value={prescriptionData.description}
+                  onChange={(e) => setPrescriptionData({...prescriptionData, description: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowPrescriptionModal(false)}
+                className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSavePrescription}
+                disabled={savingPrescription}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md flex items-center gap-2 disabled:opacity-60"
+              >
+                {savingPrescription && <Loader2 className="w-4 h-4 animate-spin" />}
+                Send Prescription
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
