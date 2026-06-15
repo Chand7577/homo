@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -17,15 +18,12 @@ def parse_bilingual(text, sep=None):
     """
     Split a bilingual cell into (english, hindi) pairs.
     Handles multiple separators like ; and , automatically.
-    e.g. 'Dread – bhiti; Terror – aatank'  →  [('Dread','bhiti'), ('Terror','aatank')]
     """
     if not text:
         return []
         
     import re
-    # If no separator provided, try to split by common ones
     if sep is None:
-        # Split by semicolon then comma then newline
         parts = re.split(r'[;,\n]', str(text))
     else:
         parts = text.split(sep)
@@ -36,7 +34,6 @@ def parse_bilingual(text, sep=None):
         if not part:
             continue
         eng, hin = part, ''
-        # Common separators for English/Hindi pairs
         for s in ['–', '-', ':', '>', '—']:
             if s in part:
                 bits = part.split(s, 1)
@@ -47,115 +44,8 @@ def parse_bilingual(text, sep=None):
     return results
 
 
-def import_rubric_row(chapter_name, rubric_name, rubric_hindi, sub_rubric,
-                       syn_text, agg_text, amel_text, med_text, history=None, caches=None):
-    """Create/update a single rubric row with all related data."""
-    if caches is None:
-        caches = {'chapters': {}, 'medicines': {}}
-    if not rubric_name:
-        return False
-
-    # 1. Chapter (level 0)
-    ch_name = chapter_name.strip().title()
-    if ch_name in caches['chapters']:
-        chapter = caches['chapters'][ch_name]
-    else:
-        chapter, _ = Rubric.objects.get_or_create(
-            name=ch_name,
-            level=0,
-            defaults={'is_active': True, 'source_import': history}
-        )
-        caches['chapters'][ch_name] = chapter
-
-    # 2. Main Rubric (level 1)
-    rubric, created = Rubric.objects.get_or_create(
-        name=rubric_name,
-        parent=chapter,
-        level=1,
-        defaults={'name_hindi': rubric_hindi, 'is_active': True, 'source_import': history}
-    )
-    if not created and rubric_hindi:
-        rubric.name_hindi = rubric_hindi
-    if sub_rubric:
-        rubric.description = sub_rubric
-    
-    # Update source_import if not set
-    if not rubric.source_import and history:
-        rubric.source_import = history
-        
-    rubric.save()
-
-    # 3. Synonyms
-    if syn_text:
-        for eng, hin in parse_bilingual(syn_text, sep=None):
-            RubricSynonym.objects.get_or_create(
-                rubric=rubric, synonym=eng,
-                defaults={'synonym_hindi': hin, 'source_import': history}
-            )
-
-    # 4. Aggravation
-    if agg_text:
-        for eng, hin in parse_bilingual(agg_text, sep=None):
-            Modality.objects.get_or_create(
-                rubric=rubric, modality_type='aggravation', name=eng,
-                defaults={'name_hindi': hin, 'source_import': history}
-            )
-
-    # 5. Amelioration
-    if amel_text:
-        for eng, hin in parse_bilingual(amel_text, sep=None):
-            Modality.objects.get_or_create(
-                rubric=rubric, modality_type='amelioration', name=eng,
-                defaults={'name_hindi': hin, 'source_import': history}
-            )
-
-    # 6. Medicines (separated by ;)
-    med_count = 0
-    if med_text:
-        import re
-        for med_item in med_text.split(';'):
-            med_item = med_item.strip()
-            if not med_item:
-                continue
-
-            grade = 3
-            med_name = med_item
-            
-            # Look for explicit grade like (3), [2], {1}
-            match = re.search(r'[\(\[\{](\d+)[\)\]\}]', med_item)
-            if match:
-                grade = int(match.group(1))
-                med_name = re.sub(r'[\(\[\{]\d+[\)\]\}]', '', med_item).strip()
-            else:
-                # Look for grade at the very end like "Ars 2"
-                match = re.search(r'\b(\d+)\s*$', med_item)
-                if match:
-                    grade = int(match.group(1))
-                    med_name = re.sub(r'\b\d+\s*$', '', med_item).strip()
-            
-            if not med_name:
-                continue
-
-            if med_name in caches['medicines']:
-                medicine = caches['medicines'][med_name]
-            else:
-                medicine, _ = Medicine.objects.get_or_create(
-                    name=med_name,
-                    defaults={'latin_name': med_name, 'source_import': history}
-                )
-                caches['medicines'][med_name] = medicine
-
-            RubricMedicineGrade.objects.get_or_create(
-                rubric=rubric, medicine=medicine,
-                defaults={'grade': grade, 'source_import': history}
-            )
-            med_count += 1
-
-    return med_count
-
-
 class Command(BaseCommand):
-    help = 'Imports ALL sheets from mastersheet final.xlsx into the database'
+    help = 'Imports ALL sheets from mastersheet final.xlsx into the database using bulk operations'
 
     def handle(self, *args, **options):
         file_path = os.path.join(
@@ -169,14 +59,9 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f'Reading: {file_path}'))
 
-        # Read ALL sheets with no header so row 0 is always data
         all_sheets_raw = pd.read_excel(file_path, sheet_name=None, header=None)
-        self.stdout.write(f'Found {len(all_sheets_raw)} sheets.')
+        self.stdout.write(f'Found {len(all_sheets_raw)} sheets. Processing in memory...')
 
-        total_rubrics = 0
-        total_medicines = 0
-        
-        # Create history record
         history = ImportHistory.objects.create(
             import_type='rubrics',
             file_name=os.path.basename(file_path),
@@ -185,85 +70,190 @@ class Command(BaseCommand):
             records_added=0,
             records_failed=0,
             status='partial',
-            message="Processing..."
+            message="Processing in memory..."
         )
 
+        chapters_to_create = {}
+        medicines_to_create = {}
+        parsed_rows = []
+
+        # Phase 1: In-memory parsing
         for sheet_name, df in all_sheets_raw.items():
             chapter_name = sheet_name.strip().lower()
-            
-            # Init caches once per script run to speed up drastically
-            if not hasattr(self, 'import_caches'):
-                self.import_caches = {'chapters': {}, 'medicines': {}}
-            
-            # Skip non-rubric sheets
             if any(k in chapter_name for k in ['instruction', 'index', 'template', 'summary']):
                 continue
-            
-            # Skip empty sheets
             if df.empty or len(df) < 2:
                 continue
             
             df = df.fillna('')
-            chapter_name_title = sheet_name.strip().title()
+            ch_name_title = sheet_name.strip().title()
+            
+            if ch_name_title not in chapters_to_create:
+                chapters_to_create[ch_name_title] = True
 
-            sheet_rubrics = 0
-            sheet_medicines = 0
-
-            with transaction.atomic():
-                for idx, row in df.iterrows():
-                    # Column positions:
-                    # 0 = chapter (sometimes), 1 = rubric EN, 2 = rubric HI,
-                    # 3 = sub-rubric, 4 = synonyms, 5 = aggravation,
-                    # 6 = amelioration, 7 = medicines
-
-                    try:
-                        # Skip pure header/label rows
-                        col1_val = clean(row.iloc[1]) if len(row) > 1 else ''
-                        if not col1_val or col1_val.lower().startswith('rubric'):
-                            continue
-
-                        # Skip rows where col1 is clearly a label
-                        if any(col1_val.lower().startswith(k) for k in [
-                            'chapter', 'symptom', 'sr.', 's.no', 'note', 'section'
-                        ]):
-                            continue
-
-                        # Determine chapter: Always use the sheet name for chapter instead of S.No column 0
-                        ch = chapter_name_title
-
-                        rubric_name  = col1_val
-                        rubric_hindi = clean(row.iloc[2]) if len(row) > 2 else ''
-                        sub_rubric   = clean(row.iloc[3]) if len(row) > 3 else ''
-                        syn_text     = clean(row.iloc[4]) if len(row) > 4 else ''
-                        agg_text     = clean(row.iloc[5]) if len(row) > 5 else ''
-                        amel_text    = clean(row.iloc[6]) if len(row) > 6 else ''
-                        med_text     = clean(row.iloc[7]) if len(row) > 7 else ''
-
-                        med_count = import_rubric_row(
-                            ch, rubric_name, rubric_hindi, sub_rubric,
-                            syn_text, agg_text, amel_text, med_text, history=history, caches=self.import_caches
-                        )
-                        if med_count is not False:
-                            sheet_rubrics += 1
-                            sheet_medicines += (med_count or 0)
-
-                    except Exception as e:
-                        self.stdout.write(self.style.WARNING(f'  Row {idx} error: {e}'))
+            for idx, row in df.iterrows():
+                try:
+                    col1_val = clean(row.iloc[1]) if len(row) > 1 else ''
+                    if not col1_val or col1_val.lower().startswith('rubric'):
+                        continue
+                    if any(col1_val.lower().startswith(k) for k in ['chapter', 'symptom', 'sr.', 's.no', 'note', 'section']):
                         continue
 
-            total_rubrics += sheet_rubrics
-            total_medicines += sheet_medicines
-            self.stdout.write(
-                f'  OK "{sheet_name}": {sheet_rubrics} rubrics, {sheet_medicines} medicine links'
-            )
+                    rubric_name  = col1_val
+                    rubric_hindi = clean(row.iloc[2]) if len(row) > 2 else ''
+                    sub_rubric   = clean(row.iloc[3]) if len(row) > 3 else ''
+                    syn_text     = clean(row.iloc[4]) if len(row) > 4 else ''
+                    agg_text     = clean(row.iloc[5]) if len(row) > 5 else ''
+                    amel_text    = clean(row.iloc[6]) if len(row) > 6 else ''
+                    med_text     = clean(row.iloc[7]) if len(row) > 7 else ''
 
-        # Update history record
-        history.records_total = total_rubrics
-        history.records_added = total_rubrics
+                    parsed_medicines = []
+                    if med_text:
+                        for med_item in med_text.split(';'):
+                            med_item = med_item.strip()
+                            if not med_item: continue
+
+                            grade = 3
+                            med_name = med_item
+                            
+                            match = re.search(r'[\(\[\{](\d+)[\)\]\}]', med_item)
+                            if match:
+                                grade = int(match.group(1))
+                                med_name = re.sub(r'[\(\[\{]\d+[\)\]\}]', '', med_item).strip()
+                            else:
+                                match = re.search(r'\b(\d+)\s*$', med_item)
+                                if match:
+                                    grade = int(match.group(1))
+                                    med_name = re.sub(r'\b\d+\s*$', '', med_item).strip()
+                            
+                            if med_name:
+                                parsed_medicines.append({'name': med_name, 'grade': grade})
+                                medicines_to_create[med_name] = True
+
+                    parsed_rows.append({
+                        'chapter': ch_name_title,
+                        'rubric': rubric_name,
+                        'rubric_hindi': rubric_hindi,
+                        'sub_rubric': sub_rubric,
+                        'syn_text': syn_text,
+                        'agg_text': agg_text,
+                        'amel_text': amel_text,
+                        'medicines': parsed_medicines
+                    })
+
+                except Exception as e:
+                    continue
+
+        self.stdout.write(f'Parsed {len(parsed_rows)} valid rows. Starting Bulk Inserts...')
+
+        with transaction.atomic():
+            # Create Chapters
+            existing_chapters = {c.name: c for c in Rubric.objects.filter(level=0, name__in=chapters_to_create.keys())}
+            new_chapter_objs = []
+            for ch in chapters_to_create:
+                if ch not in existing_chapters:
+                    new_chapter_objs.append(Rubric(name=ch, level=0, is_active=True, source_import=history))
+            if new_chapter_objs:
+                Rubric.objects.bulk_create(new_chapter_objs, batch_size=5000, ignore_conflicts=True)
+            
+            chapter_dict = {c.name: c for c in Rubric.objects.filter(level=0, name__in=chapters_to_create.keys())}
+
+            # Create Medicines
+            existing_meds = {m.name: m for m in Medicine.objects.filter(name__in=medicines_to_create.keys())}
+            new_med_objs = []
+            for med in medicines_to_create:
+                if med not in existing_meds:
+                    new_med_objs.append(Medicine(name=med, latin_name=med, source_import=history))
+            if new_med_objs:
+                Medicine.objects.bulk_create(new_med_objs, batch_size=5000, ignore_conflicts=True)
+            
+            medicine_dict = {m.name: m.id for m in Medicine.objects.filter(name__in=medicines_to_create.keys())}
+
+            # Prepare and Create Rubrics
+            rubrics_to_create = {}
+            for row in parsed_rows:
+                parent = chapter_dict.get(row['chapter'])
+                if not parent: continue
+                key = (row['rubric'], parent.id)
+                if key not in rubrics_to_create:
+                    rubrics_to_create[key] = {
+                        'name_hindi': row['rubric_hindi'],
+                        'description': row['sub_rubric']
+                    }
+
+            existing_rubrics = {}
+            for r in Rubric.objects.filter(level=1).values('id', 'name', 'parent_id'):
+                existing_rubrics[(r['name'], r['parent_id'])] = r['id']
+            
+            new_rubric_objs = []
+            for (name, parent_id), data in rubrics_to_create.items():
+                if (name, parent_id) not in existing_rubrics:
+                    new_rubric_objs.append(
+                        Rubric(
+                            name=name, 
+                            parent_id=parent_id, 
+                            level=1, 
+                            name_hindi=data['name_hindi'], 
+                            description=data['description'], 
+                            is_active=True, 
+                            source_import=history
+                        )
+                    )
+            
+            if new_rubric_objs:
+                Rubric.objects.bulk_create(new_rubric_objs, batch_size=5000, ignore_conflicts=True)
+            
+            rubric_dict = {}
+            for r in Rubric.objects.filter(level=1).values('id', 'name', 'parent_id'):
+                rubric_dict[(r['name'], r['parent_id'])] = r['id']
+
+            # Prepare Relationships
+            synonym_objs = []
+            agg_objs = []
+            amel_objs = []
+            grade_dict = {}
+
+            for row in parsed_rows:
+                parent = chapter_dict.get(row['chapter'])
+                if not parent: continue
+                rubric_id = rubric_dict.get((row['rubric'], parent.id))
+                if not rubric_id: continue
+
+                if row['syn_text']:
+                    for eng, hin in parse_bilingual(row['syn_text']):
+                        synonym_objs.append(RubricSynonym(rubric_id=rubric_id, synonym=eng, synonym_hindi=hin, source_import=history))
+
+                if row['agg_text']:
+                    for eng, hin in parse_bilingual(row['agg_text']):
+                        agg_objs.append(Modality(rubric_id=rubric_id, modality_type='aggravation', name=eng, name_hindi=hin, source_import=history))
+
+                if row['amel_text']:
+                    for eng, hin in parse_bilingual(row['amel_text']):
+                        amel_objs.append(Modality(rubric_id=rubric_id, modality_type='amelioration', name=eng, name_hindi=hin, source_import=history))
+
+                for med in row['medicines']:
+                    med_id = medicine_dict.get(med['name'])
+                    if med_id:
+                        grade_dict[(rubric_id, med_id)] = RubricMedicineGrade(
+                            rubric_id=rubric_id, medicine_id=med_id, grade=med['grade'], source_import=history
+                        )
+
+            # Bulk Insert Relationships
+            if synonym_objs:
+                RubricSynonym.objects.bulk_create(synonym_objs, batch_size=10000, ignore_conflicts=True)
+            if agg_objs:
+                Modality.objects.bulk_create(agg_objs, batch_size=10000, ignore_conflicts=True)
+            if amel_objs:
+                Modality.objects.bulk_create(amel_objs, batch_size=10000, ignore_conflicts=True)
+            if grade_dict:
+                RubricMedicineGrade.objects.bulk_create(grade_dict.values(), batch_size=10000, ignore_conflicts=True)
+
+        history.records_total = len(parsed_rows)
+        history.records_added = len(parsed_rows)
         history.status = 'success'
-        history.message = f"Imported {total_rubrics} rubrics successfully."
+        history.message = f"Imported {len(parsed_rows)} rubrics successfully."
         history.save()
 
         self.stdout.write(self.style.SUCCESS(
-            f'\n=== Done! {total_rubrics} rubrics and {total_medicines} medicine links across all sheets. ==='
+            f'\n=== Done! Successfully bulk imported {len(parsed_rows)} rubrics. ==='
         ))
