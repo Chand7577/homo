@@ -27,7 +27,7 @@ from .models import (
     CustomUser, Doctor, Patient, AdminSession,
     Rubric, RubricSynonym, Modality, Medicine, RubricMedicineGrade,
     Case, CaseRubric, Repertorization, RepertorizationResult,
-    PatientSearch, ImportHistory, SystemBackup
+    PatientSearch, ImportHistory, SystemBackup, KentRecord
 )
 
 logger = logging.getLogger(__name__)
@@ -3063,6 +3063,97 @@ def upload_mastersheet(request):
         logger.error(f"Error saving uploaded mastersheet: {str(e)}")
         return JsonResponse({'error': f'Upload failed: {str(e)}'}, status=500)
 
+@csrf_exempt
+@require_admin
+@require_http_methods(["POST"])
+def upload_kentsheet(request):
+    """Uploads the kentsheet and parses it directly."""
+    if 'file' not in request.FILES:
+        return JsonResponse({'error': 'No file uploaded'}, status=400)
+
+    uploaded_file = request.FILES['file']
+    if not uploaded_file.name.endswith(('.xlsx', '.xls')):
+        return JsonResponse({'error': 'Only Excel files (.xlsx, .xls) are supported'}, status=400)
+
+    try:
+        import pandas as pd
+        # sheet_name=None reads ALL sheets into a dictionary of DataFrames
+        df_dict = pd.read_excel(uploaded_file, header=None, sheet_name=None)
+        
+        # Clear existing Kent records
+        KentRecord.objects.all().delete()
+        
+        records = []
+        for sheet_name, df in df_dict.items():
+            for index, row in df.iterrows():
+                if index == 0: continue # Skip header
+                
+                row = row.fillna("").tolist()
+                if len(row) < 5: continue
+                
+                chapter_en = str(row[0]).strip()
+                chapter_hi = str(row[1]).strip() if len(row) > 1 else ""
+                rubric_en = str(row[2]).strip() if len(row) > 2 else ""
+                
+                # The medicine and grade are the last two non-empty columns usually,
+                # but if we fillna(""), the length is fixed to the max columns of the sheet.
+                # We need to find the last non-empty column to get the grade.
+                non_empty_indices = [i for i, x in enumerate(row) if str(x).strip() != ""]
+                if len(non_empty_indices) < 2: continue
+                
+                last_idx = non_empty_indices[-1]
+                med_idx = non_empty_indices[-2]
+                
+                try:
+                    grading = int(float(str(row[last_idx]).strip()))
+                except:
+                    continue
+                    
+                medicine = str(row[med_idx]).strip()
+                
+                subrubrics_hi = " ".join([str(row[i]).strip() for i in range(3, med_idx) if str(row[i]).strip() != ""])
+                    
+                records.append(KentRecord(
+                    chapter_english=chapter_en,
+                    chapter_hindi=chapter_hi,
+                    rubric_english=rubric_en,
+                    subrubrics_hindi=subrubrics_hi,
+                    medicine=medicine,
+                    grading=grading
+                ))
+                
+                if len(records) > 2000:
+                    KentRecord.objects.bulk_create(records)
+                    records = []
+                
+        if records:
+            KentRecord.objects.bulk_create(records)
+            
+        total_records = KentRecord.objects.count()
+        
+        ImportHistory.objects.create(
+            file_name=uploaded_file.name,
+            file_size=uploaded_file.size,
+            import_type='kentsheet',
+            status='success',
+            records_total=total_records,
+            records_added=total_records,
+            records_failed=0,
+            message='Kent Sheet parsed and saved successfully!'
+        )
+            
+        return JsonResponse({
+            'success': True,
+            'message': 'Kent Sheet parsed and saved successfully!'
+        })
+
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Error saving kent sheet: {tb}")
+        return JsonResponse({'error': f'Upload failed: {str(e)}', 'detail': tb}, status=500)
+
+
 
 @csrf_exempt
 @require_admin
@@ -4709,6 +4800,9 @@ def intelligent_rubric_search(request):
         query = query.replace('toothache', 'teeth pain')
         query = query.replace('earache', 'ear pain')
 
+        from django.db.models import Q, Count
+        import re
+        
         # ─────────────────────────────────────────────────────────────────────
         # 1. TOKENISATION — strip filler words
         # ─────────────────────────────────────────────────────────────────────
@@ -4727,7 +4821,7 @@ def intelligent_rubric_search(request):
             'तक', 'भी', 'ही', 'या', 'तो', 'जो', 'जब', 'तब', 'कोई', 'कुछ', 'क्या',
             'क्यों', 'कैसे', 'कहाँ', 'आता', 'आती', 'आते', 'लगता', 'लगती', 'लगते', 'हो',
             'जाता', 'जाती', 'जाते', 'देता', 'देती', 'देते', 'रहता', 'रहती', 'रहते',
-            'सकता', 'सकती', 'सकते', 'चाहिए', 'लिया', 'दिया', 'दिए'
+            'सकता', 'सकती', 'सकते', 'चाहिए', 'लिया', 'दिया', 'दिए', 'जैसे', 'ऐसा', 'मानो', 'बहुत'
         }
         tokens = [t for t in re.split(r'[\s,।|.:;!\-?–—]+', query.lower()) if t]
         search_words = [w for w in tokens if len(w) >= 2 and w not in filler_words]
@@ -4775,43 +4869,254 @@ def intelligent_rubric_search(request):
             'hunger': 'Stomach',
             'thirst': 'Stomach',
             'abdomen': 'Abdomen',
-            'abdominal': 'Abdomen',
-            'bloating': 'Abdomen',
-            'flatulence': 'Abdomen',
             'gas': 'Abdomen',
-            'gastric': 'Stomach',
-            'diarrhoea': 'Rectum',
-            'diarrhea': 'Rectum',
-            'constipation': 'Rectum',
+            'liver': 'Abdomen',
             'rectum': 'Rectum',
-            'rectal': 'Rectum',
-            'face': 'Face',
-            'back': 'Back',
-            'heart': 'Heart',
+            'constipation': 'Rectum',
+            'diarrhea': 'Rectum',
+            'stool': 'Stool',
+            'urine': 'Urine',
+            'bladder': 'Bladder',
+            'kidneys': 'Kidneys',
+            'kidney': 'Kidneys',
+            'prostate': 'Prostate Gland',
+            'urethra': 'Urethra',
+            'male': 'Male',
+            'female': 'Female',
+            'menses': 'Female',
+            'period': 'Female',
+            'periods': 'Female',
+            'larynx': 'Larynx',
+            'trachea': 'Larynx',
+            'voice': 'Larynx',
+            'respiration': 'Respiration',
+            'breathing': 'Respiration',
+            'asthma': 'Respiration',
+            'cough': 'Cough',
+            'expectoration': 'Expectoration',
             'chest': 'Chest',
-            'skin': 'Skin',
-            'hands': 'Extremities',
-            'legs': 'Extremities',
+            'heart': 'Chest',
+            'lungs': 'Chest',
+            'back': 'Back',
+            'spine': 'Back',
             'extremities': 'Extremities',
-            'knee': 'Extremities',
-            'shoulder': 'Extremities',
+            'leg': 'Extremities',
+            'legs': 'Extremities',
+            'arm': 'Extremities',
+            'arms': 'Extremities',
+            'hand': 'Extremities',
+            'hands': 'Extremities',
+            'foot': 'Extremities',
+            'feet': 'Extremities',
             'joint': 'Extremities',
             'joints': 'Extremities',
+            'sleep': 'Sleep',
+            'dreams': 'Dreams',
+            'chill': 'Chill',
+            'fever': 'Fever',
+            'perspiration': 'Perspiration',
+            'sweat': 'Perspiration',
+            'skin': 'Skin',
+            'eruptions': 'Skin',
+            'rash': 'Skin',
+            'itching': 'Skin',
             'generalities': 'Generalities',
             'weakness': 'Generalities',
             'fatigue': 'Generalities',
-            'fever': 'Generalities',
-            'sleep': 'Generalities',
-            'urine': 'Urine',
-            'urination': 'Urine',
-            'bladder': 'Bladder',
-            'kidney': 'Kidneys',
-            'kidneys': 'Kidneys',
-            'diabetes': 'Clinical',
-            'diabetic': 'Clinical',
-            'endocrine': 'Clinical',
-            'endrocrine': 'Clinical',
+            'blood': 'Generalities',
+            'pulse': 'Generalities',
+            
+            # HINDI MAPPINGS
+            'सिर': 'Head',
+            'सर': 'Head',
+            'दिमाग': 'Mind',
+            'मन': 'Mind',
+            'चक्कर': 'Vertigo',
+            'आंख': 'Eyes',
+            'आंखें': 'Eyes',
+            'कान': 'Ears',
+            'नाक': 'Nose',
+            'गला': 'Throat',
+            'पेट': 'Stomach',
+            'उदर': 'Abdomen',
+            'गैस': 'Abdomen',
+            'छाती': 'Chest',
+            'पीठ': 'Back',
+            'कमर': 'Back',
+            'हाथ': 'Extremities',
+            'पैर': 'Extremities',
+            'टांग': 'Extremities',
+            'नींद': 'Sleep',
+            'बुखार': 'Fever',
+            'त्वचा': 'Skin',
+            'चमड़ी': 'Skin',
+            'मल': 'Stool',
+            'पेशाब': 'Urine',
+            'खांसी': 'Cough',
+            'सांस': 'Respiration'
         }
+
+        detected_chapters = set()
+        detected_chapter = None
+
+        symptom_words = []
+        for word in search_words:
+            matched_chapter = None
+            for key, chap in BODY_PART_MAP.items():
+                if key == word.lower():
+                    matched_chapter = chap
+                    break
+            
+            if matched_chapter:
+                detected_chapters.add(matched_chapter)
+                if not detected_chapter:
+                    detected_chapter = matched_chapter
+            else:
+                symptom_words.append(word)
+
+        if not symptom_words:
+            symptom_words = search_words
+
+        sheet_type = request.GET.get('sheet_type', 'mastersheet')
+        if sheet_type == 'kentsheet':
+            # NOTE ON FIELD MAPPING (the Excel columns were imported into unexpected fields):
+            #   chapter_english  = actual chapter name        e.g. 'Mind'
+            #   chapter_hindi    = English rubric name        e.g. 'ABSENT MINDED'
+            #   rubric_english   = Hindi rubric name          e.g. 'भुलक्कड़पन'
+            #   subrubrics_hindi = sub-rubric text (mixed)    e.g. 'periodical attacks आवधिक'
+            # So for English keyword search → chapter_hindi
+            # For Hindi keyword search     → rubric_english + subrubrics_hindi
+
+            def kent_word_q(word):
+                """Match a single word across all meaningful Kent fields."""
+                return (
+                    Q(chapter_hindi__icontains=word)    # English rubric name
+                    | Q(rubric_english__icontains=word)  # Hindi rubric name
+                    | Q(subrubrics_hindi__icontains=word)  # sub-rubric text
+                )
+
+            def kent_chapter_q(chapters):
+                """Restrict to detected chapters (chapter_english is the real chapter field)."""
+                cq = Q()
+                for ch in chapters:
+                    cq |= Q(chapter_english__icontains=ch)
+                return cq
+
+            # Tier 1: AND across symptom words + chapter restriction
+            q_and = Q()
+            for word in symptom_words:
+                q_and &= kent_word_q(word)
+            if detected_chapters:
+                q_and &= kent_chapter_q(detected_chapters)
+            kent_records = list(KentRecord.objects.filter(q_and)[:200])
+
+            # Tier 1.5: AND across ALL tokens, no chapter restriction
+            if not kent_records:
+                q_and_all = Q()
+                for word in search_words:
+                    q_and_all &= kent_word_q(word)
+                kent_records = list(KentRecord.objects.filter(q_and_all)[:200])
+
+            # Tier 2: OR across symptom words + chapter restriction
+            if not kent_records:
+                q_or = Q()
+                for word in symptom_words:
+                    q_or |= kent_word_q(word)
+                if detected_chapters:
+                    q_or &= kent_chapter_q(detected_chapters)
+                kent_records = list(KentRecord.objects.filter(q_or)[:200])
+
+            # Tier 3: OR across all tokens, no chapter restriction (widest net)
+            if not kent_records:
+                q_or_all = Q()
+                for word in search_words:
+                    q_or_all |= kent_word_q(word)
+                kent_records = list(KentRecord.objects.filter(q_or_all)[:200])
+
+
+            # Build rubric_key -> all medicines map first, then build chapters_map
+            # FIELD SEMANTICS (inverted during import):
+            #   chapter_english = real chapter (e.g. 'Mind')
+            #   chapter_hindi   = English rubric name (e.g. 'ABSENT MINDED')
+            #   rubric_english  = Hindi rubric name (e.g. 'भुलक्कड़पन')
+            #   subrubrics_hindi = sub-rubric text (mixed English+Hindi)
+            # Key: (chapter_english, chapter_hindi) uniquely identifies a rubric
+
+            rubric_medicines_map = {}  # (chapter_en, rubric_en_name) -> dict
+            for rec in kent_records:
+                # Use chapter_hindi as the English rubric name for grouping
+                key = (rec.chapter_english, rec.chapter_hindi)
+                if key not in rubric_medicines_map:
+                    rubric_medicines_map[key] = {
+                        'chapter_english': rec.chapter_english,
+                        'rubric_name_english': rec.chapter_hindi,   # English rubric name
+                        'rubric_name_hindi': rec.rubric_english,    # Hindi rubric name
+                        'subrubric_text': rec.subrubrics_hindi,     # Sub-rubric detail
+                        'rec_id': rec.id,
+                        'medicines': []
+                    }
+                rubric_medicines_map[key]['medicines'].append({
+                    'id': hash(rec.medicine) % 10000,
+                    'name': rec.medicine,
+                    'grade': rec.grading,
+                    'grade_label': str(rec.grading)
+                })
+
+            # Step 2: Fetch ALL medicines for each matched rubric (beyond 200-record limit)
+            full_rubric_keys = list(rubric_medicines_map.keys())
+            if full_rubric_keys:
+                from django.db.models import Q as DQ
+                all_meds_q = DQ()
+                for (ch_en, rub_en) in full_rubric_keys:
+                    # chapter_hindi stores the English rubric name
+                    all_meds_q |= DQ(chapter_english=ch_en, chapter_hindi=rub_en)
+                for full_rec in KentRecord.objects.filter(all_meds_q):
+                    key = (full_rec.chapter_english, full_rec.chapter_hindi)
+                    if key not in rubric_medicines_map:
+                        continue
+                    med_entry = {
+                        'id': hash(full_rec.medicine) % 10000,
+                        'name': full_rec.medicine,
+                        'grade': full_rec.grading,
+                        'grade_label': str(full_rec.grading)
+                    }
+                    existing_names = {m['name'] for m in rubric_medicines_map[key]['medicines']}
+                    if full_rec.medicine not in existing_names:
+                        rubric_medicines_map[key]['medicines'].append(med_entry)
+
+            # Step 3: Build chapters_map with correct display names
+            chapters_map = {}
+            for (ch_name, rub_en_name), rdata in rubric_medicines_map.items():
+                if ch_name not in chapters_map:
+                    chapters_map[ch_name] = {
+                        'id': hash(ch_name) % 10000,
+                        'name': ch_name,
+                        'name_hindi': ch_name,
+                        'rubrics': []
+                    }
+                sorted_meds = sorted(rdata['medicines'], key=lambda m: m['grade'], reverse=True)
+                chapters_map[ch_name]['rubrics'].append({
+                    'id': rdata['rec_id'],
+                    'name': rub_en_name,                    # English rubric name for display
+                    'name_hindi': rdata['rubric_name_hindi'],  # Hindi rubric name
+                    'subrubric': rdata['subrubric_text'],   # Sub-rubric detail
+                    'chapter_name': ch_name,
+                    'full_path': f"{ch_name} > {rub_en_name}",
+                    'synonyms': [],
+                    'aggravations': [],
+                    'ameliorations': [],
+                    'medicines': sorted_meds,
+                    'top_medicines': sorted_meds,
+                    'search_score': 1000
+                })
+
+            return JsonResponse({
+                'success': True,
+                'chapters': list(chapters_map.values()),
+                'identified_chapter': None
+            })
+
+
 
         # ─────────────────────────────────────────────────────────────────────
         # 3. HYPHEN-SEPARATED SEARCH (Removed - standard logic handles this better)
@@ -6896,14 +7201,14 @@ def bulk_upload_rubrics(request):
         return JsonResponse({'error': 'Only Excel files (.xlsx, .xls) are supported'}, status=400)
 
     # FILE SIZE CHECK
-    MAX_FILE_SIZE = 300 * 1024  # 300KB limit
+    MAX_FILE_SIZE = 15 * 1024 * 1024  # 15MB limit
     if uploaded_file.size > MAX_FILE_SIZE:
-        file_size_kb = uploaded_file.size / 1024
+        file_size_mb = uploaded_file.size / (1024 * 1024)
         return JsonResponse({
-            'error': f'File too large ({file_size_kb:.1f}KB). Maximum is 300KB. Please split your file into smaller parts (recommended: 2,000 rows per file).',
-            'file_size_kb': round(file_size_kb, 1),
-            'max_size_kb': 300,
-            'suggestion': 'Split the file by selecting fewer sheets or rows and saving them as separate Excel files.'
+            'error': f'File too large ({file_size_mb:.1f}MB). Maximum is 15MB.',
+            'file_size_mb': round(file_size_mb, 1),
+            'max_size_mb': 15,
+            'suggestion': 'Split the file by selecting fewer sheets or rows.'
         }, status=413)
 
     tmp_file_path = None
@@ -6916,10 +7221,10 @@ def bulk_upload_rubrics(request):
 
         logger.info(f"Processing uploaded file: {uploaded_file.name} ({uploaded_file.size} bytes)")
 
-        # Process with timeout protection (25 seconds - leave 5 for response)
+        # Process with timeout protection (120 seconds)
         try:
-            with time_limit(25):
-                stats = process_excel_upload(tmp_file_path, batch_size=15)
+            with time_limit(120):
+                stats = process_excel_upload(tmp_file_path, batch_size=5000)
         except TimeoutException:
             logger.warning("Upload processing timed out - returning partial results")
             stats = {
@@ -6969,7 +7274,7 @@ def bulk_upload_rubrics(request):
                 pass
 
 
-def process_excel_upload(file_path, batch_size=15):
+def process_excel_upload(file_path, batch_size=5000):
     logger = logging.getLogger(__name__)
     stats = {
         'total_rows': 0,
@@ -7030,7 +7335,7 @@ def process_excel_upload(file_path, batch_size=15):
         return stats
 
 
-def process_sheet(sheet_name, df, batch_size=15):
+def process_sheet(sheet_name, df, batch_size=5000):
     logger = logging.getLogger(__name__)
 
     df = df.fillna('')
@@ -7109,7 +7414,7 @@ def process_batch(sheet_name, batch_df, rubric_col, medicine_col):
     medicine_names = list(medicine_names)
     all_medicines = {}
     
-    CHUNK_SIZE = 100  # Process 100 medicines at a time
+    CHUNK_SIZE = 2000  # Process 2000 medicines at a time
     for i in range(0, len(medicine_names), CHUNK_SIZE):
         chunk = medicine_names[i:i + CHUNK_SIZE]
         chunk_medicines = Medicine.objects.filter(name__in=chunk).in_bulk(field_name='name')
@@ -8509,6 +8814,140 @@ def doctor_rubric_repertorize(request):
     if not symptoms:
         return JsonResponse({'error': 'No searchable keywords extracted.'}, status=400)
 
+    sheet_type = data.get('sheet_type', 'mastersheet')
+
+    if sheet_type == 'kentsheet':
+        from django.db.models import Q
+        matched_rubrics_data = []
+        all_medicines = {}
+        
+        for sym, tokens in sentence_tokens.items():
+            if not tokens: continue
+            
+            # FIELD MAPPING NOTE: columns were imported into unexpected model fields:
+            #   chapter_english  = real chapter  (e.g. 'Mind')
+            #   chapter_hindi    = English rubric name  (e.g. 'ABSENT MINDED')
+            #   rubric_english   = Hindi rubric name    (e.g. '\u092d\u0941\u0932\u0915\u094d\u0915\u0921\u093c\u092a\u0928')
+            #   subrubrics_hindi = mixed English+Hindi sub-rubric text
+            # So English keyword search -> chapter_hindi
+            # Hindi keyword search      -> rubric_english + subrubrics_hindi
+
+            def kent_reper_word_q(token):
+                return (
+                    Q(chapter_hindi__icontains=token)      # English rubric name
+                    | Q(rubric_english__icontains=token)    # Hindi rubric name
+                    | Q(subrubrics_hindi__icontains=token)  # sub-rubric text
+                )
+
+            q_objects = Q()
+            for token in tokens:
+                q_objects |= kent_reper_word_q(token)
+
+            if chapter_id:
+                try:
+                    chapter = Rubric.objects.get(id=chapter_id)
+                    q_objects &= Q(chapter_english__iexact=chapter.name)
+                except Rubric.DoesNotExist:
+                    pass
+
+            records = KentRecord.objects.filter(q_objects)[:500]
+            if not records:
+                continue
+
+            # Step 1: Build rubric groups — key on (chapter_english, chapter_hindi)
+            # because chapter_hindi holds the English rubric name (unique per rubric)
+            rubric_groups = {}
+            for rec in records:
+                key = (rec.chapter_english, rec.chapter_hindi)
+                if key not in rubric_groups:
+                    rubric_groups[key] = {
+                        'id': rec.id,
+                        'name': f"{rec.chapter_english} > {rec.chapter_hindi}",  # English display
+                        'name_hindi': rec.rubric_english,   # Hindi rubric name
+                        'subrubric': rec.subrubrics_hindi,  # sub-rubric detail
+                        'score': 100,
+                        'medicines': [],
+                        '_seen_meds': set()
+                    }
+                if rec.medicine not in rubric_groups[key]['_seen_meds']:
+                    rubric_groups[key]['medicines'].append({
+                        'id': rec.id,
+                        'name': rec.medicine,
+                        'latin_name': '',
+                        'grade': rec.grading,
+                        'grade_label': str(rec.grading)
+                    })
+                    rubric_groups[key]['_seen_meds'].add(rec.medicine)
+
+            # Step 2: For each matched rubric, fetch ALL its medicines
+            if rubric_groups:
+                all_meds_q = Q()
+                for (ch_en, ch_hi) in rubric_groups.keys():
+                    # chapter_hindi is the English rubric name — use it for exact match
+                    all_meds_q |= Q(chapter_english=ch_en, chapter_hindi=ch_hi)
+                for full_rec in KentRecord.objects.filter(all_meds_q):
+                    key = (full_rec.chapter_english, full_rec.chapter_hindi)
+                    if key in rubric_groups and full_rec.medicine not in rubric_groups[key]['_seen_meds']:
+                        rubric_groups[key]['medicines'].append({
+                            'id': full_rec.id,
+                            'name': full_rec.medicine,
+                            'latin_name': '',
+                            'grade': full_rec.grading,
+                            'grade_label': str(full_rec.grading)
+                        })
+                        rubric_groups[key]['_seen_meds'].add(full_rec.medicine)
+
+            # Step 3: format matched rubrics and update all_medicines chart
+            rubric_list = []
+            for key, r in rubric_groups.items():
+                r.pop('_seen_meds', None)
+                r['medicine_count'] = len(r['medicines'])
+                r['medicines'].sort(key=lambda x: x['grade'], reverse=True)
+                rubric_list.append(r)
+                
+                for med in r['medicines']:
+                    mname = med['name']
+                    if mname not in all_medicines:
+                        all_medicines[mname] = {'occurrences': 0, 'total_grade': 0, 'rubrics': set()}
+                    all_medicines[mname]['occurrences'] += 1
+                    all_medicines[mname]['total_grade'] += med['grade']
+                    all_medicines[mname]['rubrics'].add(r['name'])
+                
+            if rubric_list:
+                matched_rubrics_data.append({
+                    'symptom': sym,
+                    'rubric_count': len(rubric_list),
+                    'rubrics': rubric_list[:top_n]
+                })
+
+
+        # Process medicine chart
+        medicine_chart = []
+        for name, mdata in all_medicines.items():
+            medicine_chart.append({
+                'id': hash(name) % 10000,
+                'name': name,
+                'latin_name': '',
+                'occurrences': mdata['occurrences'],
+                'total_grade': mdata['total_grade'],
+                'avg_grade': round(mdata['total_grade'] / mdata['occurrences'], 1) if mdata['occurrences'] > 0 else 0,
+                'score': mdata['total_grade'], # Ranking by total grade sum as requested
+                'rubric_names': list(mdata['rubrics'])
+            })
+            
+        medicine_chart.sort(key=lambda x: x['score'], reverse=True)
+        
+        return JsonResponse({
+            'success': True,
+            'chapter_id': chapter_id,
+            'symptoms': list(symptoms_raw),
+            'symptoms_breakdown': matched_rubrics_data,
+            'total_matched': sum(len(r['rubrics']) for r in matched_rubrics_data),
+            'top_rubrics': [], # Kent doesn't need top rubrics list for summary
+            'medicine_chart': medicine_chart[:50]
+        })
+
+
     try:
         # ── Step 1: Build search queryset ─────────────────────────────────────
         base_qs = Rubric.objects.filter(is_active=True).exclude(name__in=['', '""']).prefetch_related(
@@ -8655,6 +9094,33 @@ def doctor_rubric_repertorize(request):
             'स्लीप':         ['sleep'],
             'नाइट':         ['night'],
             'मॉर्निंग':      ['morning'],
+            # Abscess / Wounds / Swellings
+            'फोड़ा':         ['abscess', 'abscesses', 'boil', 'suppuration'],
+            'फोड़े':         ['abscess', 'abscesses', 'boil'],
+            'घाव':          ['wound', 'ulcer', 'sore', 'injury'],
+            'नासूर':         ['fistula', 'ulcer', 'sinus'],
+            'गांठ':          ['lump', 'tumor', 'swelling', 'nodule', 'indurations'],
+            'गाँठ':          ['lump', 'tumor', 'swelling', 'nodule'],
+            'सूजन':          ['swelling', 'edema', 'inflammation', 'tumefaction'],
+            # Body regions / joints
+            'जांघ':          ['thigh', 'inguinal', 'femoral', 'groin'],
+            'जाँघ':          ['thigh', 'inguinal', 'femoral', 'groin'],
+            'जोड़':           ['joint', 'articulation'],
+            'जोड़ों':         ['joint', 'joints', 'articulation'],
+            'कंधा':          ['shoulder'],
+            'कूल्हा':         ['hip', 'coxal'],
+            'घुटना':          ['knee'],
+            'टखना':          ['ankle'],
+            'कलाई':          ['wrist'],
+            'कोहनी':          ['elbow'],
+            'ऊसन्धि':        ['inguinal', 'groin'],
+            'कमर':           ['lumbar', 'hip', 'waist', 'back'],
+            'पेड़ू':          ['pelvis', 'pelvic'],
+            # Inflammation / infection terms
+            'पीप':           ['pus', 'suppuration', 'discharge'],
+            'मवाद':          ['pus', 'suppuration'],
+            'दाह':           ['inflammation', 'burning', 'pyrexia'],
+            'लाली':          ['redness', 'erythema', 'inflammation'],
         }
 
         logger.debug(f"DEBUG REPERTORIZE: all_sub_symptoms={all_sub_symptoms}")
