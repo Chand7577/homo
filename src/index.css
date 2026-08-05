@@ -1,0 +1,501 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --pine: #062E6F;
+    --pine-light: #084A9E;
+    --parchment: #F8F9FA;
+    --parchment-dark: #E9ECEF;
+    --amber: #C86B5E;
+    --amber-light: #E89B8F;
+    --sage: #6C757D;
+    --seal: #8B3A2A;
+    --ink: #212529;
+    
+    /* Typography Variables */
+    --_typography---font--primary-family: Helveticanowdisplay, Arial, sans-serif;
+    --_typography---font--primary-regular: 400;
+    --_typography---font--primary-medium: 500;
+    --_typography---font--primary-bold: 700;
+    --_typography---font--primary-light: 300;
+    --_typography---font--secondary-family: IvarDisplay, Arial, sans-serif;
+    --_typography---font--secondary-regular: 400;
+    --_typography---font--secondary-medium: 500;
+    --_typography---font--secondary-semibold: 600;
+    --_typography---font--secondary-bold: 700;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-family: 'Libre Franklin', sans-serif;
+    color: #212529;
+    background-color: #F8F9FA;
+  }
+
+  h1, h2, h3, h4, .font-serif-display {
+    font-family: 'Fraunces', serif;
+    font-feature-settings: "cv01", "cv02", "opsz";
+  }
+
+  .font-mono-ledger {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .font-sans-body {
+    font-family: 'Libre Franklin', sans-serif;
+  }
+
+  /* Maven-style Typography */
+  .font-primary {
+    font-family: var(--_typography---font--primary-family);
+  }
+
+  .font-secondary {
+    font-family: var(--_typography---font--secondary-family);
+  }
+
+  .font-primary-light {
+    font-family: var(--_typography---font--primary-family);
+    font-weight: var(--_typography---font--primary-light);
+  }
+
+  .font-primary-regular {
+    font-family: var(--_typography---font--primary-family);
+    font-weight: var(--_typography---font--primary-regular);
+  }
+
+  .font-primary-medium {
+    font-family: var(--_typography---font--primary-family);
+    font-weight: var(--_typography---font--primary-medium);
+  }
+
+  .font-primary-bold {
+    font-family: var(--_typography---font--primary-family);
+    font-weight: var(--_typography---font--primary-bold);
+  }
+
+  .font-secondary-regular {
+    font-family: var(--_typography---font--secondary-family);
+    font-weight: var(--_typography---font--secondary-regular);
+  }
+
+  .font-secondary-medium {
+    font-family: var(--_typography---font--secondary-family);
+    font-weight: var(--_typography---font--secondary-medium);
+  }
+
+  .font-secondary-semibold {
+    font-family: var(--_typography---font--secondary-family);
+    font-weight: var(--_typography---font--secondary-semibold);
+  }
+
+  .font-secondary-bold {
+    font-family: var(--_typography---font--secondary-family);
+    font-weight: var(--_typography---font--secondary-bold);
+  }
+}
+
+/* ─── Global Max-Width Container ─── */
+/* Prevents sections from stretching on ultra-wide screens (1440px+) */
+.section-container {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;   /* 24px */
+  padding-right: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .section-container {
+    padding-left: 2rem;   /* 32px */
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .section-container {
+    padding-left: 3rem;   /* 48px */
+    padding-right: 3rem;
+  }
+}
+
+/* Custom Utilities for Apothecary / Materia Medica Ledger Theme */
+
+/* Surface class for cards and containers */
+.surface {
+  background-color: #ffffff;
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+/* Torn paper edge bottom clip-path */
+.torn-bottom {
+  clip-path: polygon(
+    0% 0%, 100% 0%, 
+    100% calc(100% - 10px), 97% 100%, 94% calc(100% - 6px), 91% 100%, 88% calc(100% - 8px),
+    84% 100%, 80% calc(100% - 6px), 76% 100%, 72% calc(100% - 9px), 67% 100%,
+    62% calc(100% - 5px), 58% 100%, 53% calc(100% - 8px), 48% 100%, 43% calc(100% - 6px),
+    38% 100%, 33% calc(100% - 9px), 28% 100%, 23% calc(100% - 5px), 18% 100%,
+    13% calc(100% - 8px), 8% 100%, 4% calc(100% - 5px), 0% calc(100% - 10px)
+  );
+}
+
+.torn-paper-edge {
+  background-image: radial-gradient(circle at 50% 0%, transparent 60%, rgba(6, 46, 111, 0.05) 100%);
+  border: 1px dashed rgba(108, 117, 125, 0.4);
+}
+
+/* Specimen Card Corner Tick Marks */
+.specimen-card {
+  position: relative;
+  background-color: #E9ECEF;
+  border: 1px solid rgba(108, 117, 125, 0.35);
+  box-shadow: 0 4px 20px -2px rgba(6, 46, 111, 0.06);
+}
+
+/* Four Corner Ticks (+ marks) */
+.specimen-card::before,
+.specimen-card::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+
+/* Corner ticks styling via helper elements or CSS */
+.corner-tick {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: #6C757D;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.corner-tick-tl { top: 6px; left: 6px; border-top: 1.5px solid #6C757D; border-left: 1.5px solid #6C757D; }
+.corner-tick-tr { top: 6px; right: 6px; border-top: 1.5px solid #6C757D; border-right: 1.5px solid #6C757D; }
+.corner-tick-bl { bottom: 6px; left: 6px; border-bottom: 1.5px solid #6C757D; border-left: 1.5px solid #6C757D; }
+.corner-tick-br { bottom: 6px; right: 6px; border-bottom: 1.5px solid #6C757D; border-right: 1.5px solid #6C757D; }
+
+/* Ledger Paper Grid Background Texture */
+.ledger-grid {
+  background-image: 
+    linear-gradient(to right, rgba(108, 117, 125, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(108, 117, 125, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Apothecary Amber Glow */
+.amber-glow {
+  box-shadow: 0 0 25px -3px rgba(200, 107, 94, 0.25);
+}
+
+.amber-btn {
+  background-color: #C86B5E;
+  color: #F8F9FA;
+  transition: all 0.2s ease-in-out;
+}
+.amber-btn:hover {
+  background-color: #E89B8F;
+  color: #062E6F;
+  box-shadow: 0 4px 14px rgba(200, 107, 94, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Pine Primary Button */
+.pine-btn {
+  background-color: #062E6F;
+  color: #F8F9FA;
+  transition: all 0.2s ease-in-out;
+}
+.pine-btn:hover {
+  background-color: #084A9E;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* Terracotta Button - Primary action button */
+.terracotta-btn {
+  background: linear-gradient(135deg, #C86B5E 0%, #E89B8F 100%);
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease-in-out;
+  border: none;
+  cursor: pointer;
+  min-height: 44px;
+}
+.terracotta-btn:hover {
+  background: linear-gradient(135deg, #8B3A2A 0%, #C86B5E 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px -5px rgba(200, 107, 94, 0.4);
+}
+.terracotta-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Ghost Button - Secondary action button */
+.ghost-btn {
+  background-color: transparent;
+  color: #6C757D;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  min-height: 44px;
+}
+.ghost-btn:hover {
+  background-color: #E9ECEF;
+  color: #062E6F;
+  transform: translateY(-1px);
+}
+.ghost-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Custom Scrollbar for Ledger Lists */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #E9ECEF;
+}
+::-webkit-scrollbar-thumb {
+  background: #6C757D;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #C86B5E;
+}
+
+/* Wax Seal Stamp Badge */
+.wax-seal {
+  width: 42px;
+  height: 42px;
+  background-color: #8B3A2A;
+  color: #F8F9FA;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 6px rgba(0,0,0,0.4), 0 2px 8px rgba(139,58,42,0.3);
+  border: 2px dashed rgba(248, 249, 250, 0.3);
+}
+
+/* Halftone Pattern Effects */
+.halftone-bg {
+  background-image: 
+    radial-gradient(circle at center, rgba(6, 46, 111, 0.8) 1px, transparent 1px),
+    radial-gradient(circle at center, rgba(6, 46, 111, 0.8) 1px, transparent 1px);
+  background-size: 20px 20px, 20px 20px;
+  background-position: 0 0, 10px 10px;
+}
+
+.halftone-light {
+  background-image: 
+    radial-gradient(circle at center, rgba(108, 117, 125, 0.15) 2px, transparent 2px),
+    radial-gradient(circle at center, rgba(108, 117, 125, 0.15) 2px, transparent 2px);
+  background-size: 24px 24px, 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+.halftone-gradient {
+  position: relative;
+  overflow: hidden;
+}
+
+.halftone-gradient::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle at center, rgba(0, 0, 0, 0.4) 1.5px, transparent 1.5px);
+  background-size: 18px 18px;
+  mix-blend-mode: multiply;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.halftone-hero {
+  background: 
+    radial-gradient(circle at 30% 40%, rgba(200, 107, 94, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 70% 60%, rgba(6, 46, 111, 0.2) 0%, transparent 50%);
+}
+
+.halftone-dots-animate {
+  animation: halftone-shift 20s ease-in-out infinite;
+}
+
+@keyframes halftone-shift {
+  0%, 100% {
+    background-position: 0 0, 10px 10px;
+  }
+  50% {
+    background-position: 5px 5px, 15px 15px;
+  }
+}
+
+/* Comic Book Style Borders */
+.comic-border {
+  border: 3px solid #062E6F;
+  box-shadow: 
+    4px 4px 0 rgba(6, 46, 111, 0.2),
+    -1px -1px 0 rgba(255, 255, 255, 0.5) inset;
+}
+
+.pop-art-shadow {
+  box-shadow: 
+    6px 6px 0 rgba(6, 46, 111, 0.9),
+    12px 12px 0 rgba(200, 107, 94, 0.5);
+}
+
+/* Duotone Filter Effect */
+.duotone-blue {
+  filter: grayscale(100%) contrast(1.2) brightness(1.1);
+  mix-blend-mode: multiply;
+}
+
+.duotone-blue::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #062E6F 0%, #C86B5E 100%);
+  mix-blend-mode: screen;
+  opacity: 0.7;
+}
+
+/* Halftone Dot Pattern Effect */
+.halftone-dots {
+  background-image: radial-gradient(circle, rgba(6, 46, 111, 0.15) 1px, transparent 1px);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+}
+
+.halftone-dots-light {
+  background-image: radial-gradient(circle, rgba(200, 107, 94, 0.08) 1.5px, transparent 1.5px);
+  background-size: 12px 12px;
+}
+
+.halftone-dots-dense {
+  background-image: radial-gradient(circle, rgba(6, 46, 111, 0.25) 1px, transparent 1px);
+  background-size: 6px 6px;
+}
+
+.halftone-gradient {
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(6, 46, 111, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(200, 107, 94, 0.08) 0%, transparent 50%),
+    radial-gradient(circle, rgba(6, 46, 111, 0.12) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 10px 10px;
+}
+
+/* Glass morphism effect for cards */
+.glass-card {
+  background: rgba(248, 249, 250, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(108, 117, 125, 0.2);
+}
+
+.glass-card-dark {
+  background: rgba(6, 46, 111, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(248, 249, 250, 0.1);
+}
+
+/* Gradient text effect */
+.gradient-text {
+  background: linear-gradient(135deg, #062E6F 0%, #C86B5E 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Hover lift effect */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -10px rgba(6, 46, 111, 0.2);
+}
+
+/* Animations */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.02); }
+}
+.animate-pulse-subtle {
+  animation: pulse-subtle 4s ease-in-out infinite;
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+.animate-float {
+  animation: float-slow 5s ease-in-out infinite;
+}
+
+@keyframes halftone-shift {
+  0%, 100% { background-position: 0 0, 0 0, 0 0; }
+  50% { background-position: 5px 5px, 0 0, 3px 3px; }
+}
+.animate-halftone {
+  animation: halftone-shift 20s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out;
+}
+
+/* Smooth gradient animation for CTAs */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.animate-pop-in {
+  animation: pop-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
