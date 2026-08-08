@@ -232,7 +232,7 @@ export default function SharePrescriptionModal({ prescription, onClose, lang = '
                 </p>
                 <p className="text-xs text-slate-500">
                   {prescription.patientId 
-                    ? t('Send to patient inbox', 'मरीज़ के इनबॉक्स में भेजें')
+                    ? t('Send to patient\'s inbox', 'मरीज़ के इनबॉक्स में भेजें')
                     : t('Patient not registered', 'मरीज़ पंजीकृत नहीं है')}
                 </p>
               </div>

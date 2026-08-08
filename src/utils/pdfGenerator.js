@@ -70,25 +70,6 @@ const transliterateHindi = (text) => {
   return str;
 };
 
-const cleanSymptomText = (sym) => {
-  if (!sym) return '';
-  let str = '';
-  if (typeof sym === 'string') {
-    str = sym;
-  } else if (typeof sym === 'object') {
-    str = sym.symptom || sym.rubricName || sym.rubric || sym.name || sym.label || JSON.stringify(sym);
-  } else {
-    str = String(sym);
-  }
-  if (str.startsWith('{') && str.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(str);
-      str = parsed.symptom || parsed.rubricName || parsed.rubric || parsed.name || str;
-    } catch (e) {}
-  }
-  return transliterateHindi(str);
-};
-
 const freqLabel = (val, lang) => {
   const o = FREQ_OPTIONS.find(f => f.value === val);
   return o ? o.en : (val || '');
@@ -386,48 +367,6 @@ export const generatePrescriptionPDF = (prescription, lang = 'en', autoDownload 
   }
 
   y += 4;
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // CHIEF COMPLAINTS / SYMPTOMS - Normalized & Transliterated
-  // ══════════════════════════════════════════════════════════════════════════
-  
-  let symptomList = [];
-  if (Array.isArray(prescription.symptoms)) {
-    symptomList = prescription.symptoms
-      .map(s => cleanSymptomText(s))
-      .filter(s => s && s.trim().length > 0);
-  } else if (typeof prescription.symptoms === 'string' && prescription.symptoms.trim()) {
-    symptomList = prescription.symptoms
-      .split(/[,;\n]+/)
-      .map(s => cleanSymptomText(s))
-      .filter(s => s && s.trim().length > 0);
-  }
-  
-  if (symptomList.length > 0 && y < H - 45) {
-    doc.setDrawColor(220, 226, 235);
-    doc.line(marginL, y, W - marginR, y);
-    y += 6;
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(71, 85, 105);
-    doc.text('Chief Complaints / Symptoms', marginL, y);
-    y += 6;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(51, 65, 85);
-    
-    symptomList.slice(0, 10).forEach((sym, i) => {
-      if (y < H - 40) {
-        const symLines = doc.splitTextToSize(`${i + 1}. ${sym}`, contentW - 8);
-        doc.text(symLines, marginL + 3, y);
-        y += symLines.length * 4.5 + 2;
-      }
-    });
-    
-    y += 4;
-  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // GUIDELINES BOX

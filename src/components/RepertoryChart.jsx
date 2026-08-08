@@ -8,7 +8,7 @@ const GRADE_STYLES = {
 };
 const GRADE_LABEL = { 3: '3°', 2: '2°', 1: '1°' };
 
-export default function RepertoryChart({ matchedRubrics = [], lang = 'en', onUpdateGrade, selectedRubricId, onRowSelect }) {
+export default function RepertoryChart({ matchedRubrics = [], lang = 'en', onUpdateGrade, selectedRubricId, onRowSelect, aiUsed = true }) {
   const [extraMedicines, setExtraMedicines] = useState([]);
 
   // Known chapter/section names that should never appear as medicine columns
@@ -120,7 +120,7 @@ export default function RepertoryChart({ matchedRubrics = [], lang = 'en', onUpd
                     row.confidence >= 80 ? 'text-emerald-600' :
                     row.confidence >= 50 ? 'text-amber-600' : 'text-slate-400'
                   }`}>
-                    <span className="text-slate-400 font-normal">AI</span>
+                    <span className="text-slate-400 font-normal">{aiUsed ? 'AI' : 'Match'}</span>
                     {row.confidence}%
                   </span>
                 )}
@@ -174,7 +174,9 @@ export default function RepertoryChart({ matchedRubrics = [], lang = 'en', onUpd
                   {lang === 'en' ? 'Amel ▼' : 'शमन ▼'}
                 </th>
                 <th className="px-5 py-5 font-semibold whitespace-nowrap text-slate-300">
-                  {lang === 'en' ? 'AI Confidence' : 'AI विश्वास'}
+                  {aiUsed 
+                    ? (lang === 'en' ? 'AI Confidence' : 'AI विश्वास')
+                    : (lang === 'en' ? 'Match Confidence' : 'मिलान विश्वसनीयता')}
                 </th>
                 {allMedicines.map(med => (
                   <th key={med} className="px-4 py-5 font-semibold whitespace-nowrap text-center border-l border-slate-700">

@@ -32,11 +32,13 @@ export default function RubricManagement({ lang = 'en' }) {
   
   // New rubric form
   const [newRubric, setNewRubric] = useState({
+    repertoryId: '',
     chapter: { en: '', hi: '' },
     rubric: { en: '', hi: '' },
     subrubric: { en: '', hi: '' },
     modalities: { aggravation: [], amelioration: [] },
-    synonyms: { en: [], hi: [] }
+    synonyms: { en: [], hi: [] },
+    medicines: {}
   });
   
   // Edit form
@@ -45,10 +47,83 @@ export default function RubricManagement({ lang = 'en' }) {
     rubric: { en: '', hi: '' },
     subrubric: { en: '', hi: '' },
     modalities: { aggravation: [], amelioration: [] },
-    synonyms: { en: [], hi: [] }
+    synonyms: { en: [], hi: [] },
+    medicines: {}
   });
 
+  // Medicine input for forms
+  const [newMedicineInput, setNewMedicineInput] = useState({ name: '', grade: 3 });
+  const [editMedicineInput, setEditMedicineInput] = useState({ name: '', grade: 3 });
+
+  // Remedy addition inline state: { [rubricId]: { name: '', grade: 3 } }
+  const [addingRemedy, setAddingRemedy] = useState({});
+
+  // Debounced search query state
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
   const t = (en, hi) => lang === 'en' ? en : hi;
+
+  const handleAddRemedyToRubric = async (rubric) => {
+    const currentInput = addingRemedy[rubric._id] || {};
+    const remedyName = (currentInput.name || '').trim();
+    const remedyGrade = Number(currentInput.grade || 3);
+
+    if (!remedyName) return;
+
+    const medicinesObj = rubric.medicines instanceof Map 
+      ? Object.fromEntries(rubric.medicines) 
+      : { ...(rubric.medicines || {}) };
+
+    medicinesObj[remedyName] = remedyGrade;
+
+    try {
+      await updateRubric(rubric._id, { medicines: medicinesObj });
+      setRubrics(prev => prev.map(r => r._id === rubric._id ? { ...r, medicines: medicinesObj } : r));
+      setAddingRemedy(prev => ({ ...prev, [rubric._id]: { name: '', grade: 3 } }));
+    } catch (err) {
+      console.error('Error adding remedy:', err);
+      setError(t('Failed to add remedy.', 'दवा जोड़ने में विफल।'));
+    }
+  };
+
+  const handleRemoveRemedyFromRubric = async (rubric, remedyName) => {
+    const medicinesObj = rubric.medicines instanceof Map 
+      ? Object.fromEntries(rubric.medicines) 
+      : { ...(rubric.medicines || {}) };
+
+    delete medicinesObj[remedyName];
+
+    try {
+      await updateRubric(rubric._id, { medicines: medicinesObj });
+      setRubrics(prev => prev.map(r => r._id === rubric._id ? { ...r, medicines: medicinesObj } : r));
+    } catch (err) {
+      console.error('Error removing remedy:', err);
+    }
+  };
+
+  const handleCycleRemedyGrade = async (rubric, remedyName, currentGrade) => {
+    const nextGrade = currentGrade >= 3 ? 1 : currentGrade + 1;
+    const medicinesObj = rubric.medicines instanceof Map 
+      ? Object.fromEntries(rubric.medicines) 
+      : { ...(rubric.medicines || {}) };
+
+    medicinesObj[remedyName] = nextGrade;
+
+    try {
+      await updateRubric(rubric._id, { medicines: medicinesObj });
+      setRubrics(prev => prev.map(r => r._id === rubric._id ? { ...r, medicines: medicinesObj } : r));
+    } catch (err) {
+      console.error('Error updating remedy grade:', err);
+    }
+  };
+
+  // Debounce search query by 350ms to prevent per-keystroke API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     fetchRepertories();
@@ -56,7 +131,7 @@ export default function RubricManagement({ lang = 'en' }) {
 
   useEffect(() => {
     fetchRubrics();
-  }, [page, searchQuery, selectedRepertory, selectedChapter]);
+  }, [page, debouncedSearchQuery, selectedRepertory, selectedChapter]);
 
   useEffect(() => {
     // Fetch chapters when repertory changes
@@ -110,7 +185,7 @@ export default function RubricManagement({ lang = 'en' }) {
       const params = {
         page,
         limit,
-        search: searchQuery || undefined,
+        search: debouncedSearchQuery || undefined,
         repertoryId: selectedRepertory !== 'all' ? selectedRepertory : undefined,
         chapter: selectedChapter !== 'all' ? selectedChapter : undefined
       };
@@ -127,6 +202,11 @@ export default function RubricManagement({ lang = 'en' }) {
   };
 
   const handleAddRubric = async () => {
+    if (!newRubric.repertoryId) {
+      setError(t('Please select a target Repertory.', 'कृपया एक रेपर्टरी चुनें।'));
+      return;
+    }
+
     if (!newRubric.chapter.en || !newRubric.rubric.en) {
       setError(t('Chapter and Rubric name are required.', 'अध्याय और रुब्रिक नाम आवश्यक हैं।'));
       return;
@@ -141,12 +221,15 @@ export default function RubricManagement({ lang = 'en' }) {
       
       setSuccess(t('Rubric added successfully!', 'रुब्रिक सफलतापूर्वक जोड़ी गई!'));
       setNewRubric({
-        chapter: { en: '', hi: '' },
+        repertoryId: selectedRepertory !== 'all' ? selectedRepertory : (repertories[0]?._id || ''),
+        chapter: { en: selectedChapter !== 'all' ? selectedChapter : '', hi: '' },
         rubric: { en: '', hi: '' },
         subrubric: { en: '', hi: '' },
         modalities: { aggravation: [], amelioration: [] },
-        synonyms: { en: [], hi: [] }
+        synonyms: { en: [], hi: [] },
+        medicines: {}
       });
+      setNewMedicineInput({ name: '', grade: 3 });
       setIsAddingNew(false);
       
       setTimeout(() => setSuccess(''), 3000);
@@ -177,8 +260,10 @@ export default function RubricManagement({ lang = 'en' }) {
         rubric: { en: '', hi: '' },
         subrubric: { en: '', hi: '' },
         modalities: { aggravation: [], amelioration: [] },
-        synonyms: { en: [], hi: [] }
+        synonyms: { en: [], hi: [] },
+        medicines: {}
       });
+      setEditMedicineInput({ name: '', grade: 3 });
       
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -212,6 +297,10 @@ export default function RubricManagement({ lang = 'en' }) {
 
   const startEditing = (rubric) => {
     setEditingRubric(rubric._id);
+    const medicinesObj = rubric.medicines instanceof Map 
+      ? Object.fromEntries(rubric.medicines) 
+      : { ...(rubric.medicines || {}) };
+    
     setEditForm({
       chapter: { en: rubric.chapter?.en || '', hi: rubric.chapter?.hi || '' },
       rubric: { en: rubric.rubric?.en || '', hi: rubric.rubric?.hi || '' },
@@ -223,8 +312,10 @@ export default function RubricManagement({ lang = 'en' }) {
       synonyms: {
         en: rubric.synonyms?.en || [],
         hi: rubric.synonyms?.hi || []
-      }
+      },
+      medicines: medicinesObj
     });
+    setEditMedicineInput({ name: '', grade: 3 });
     setIsAddingNew(false);
   };
 
@@ -275,6 +366,20 @@ export default function RubricManagement({ lang = 'en' }) {
             onClick={() => {
               setIsAddingNew(true);
               setEditingRubric(null);
+              const foundCh = selectedChapter !== 'all' ? chapters.find(c => c.chapterEn === selectedChapter) : null;
+              setNewRubric({
+                repertoryId: selectedRepertory !== 'all' ? selectedRepertory : (repertories[0]?._id || ''),
+                chapter: { 
+                  en: selectedChapter !== 'all' ? selectedChapter : '', 
+                  hi: foundCh?.chapterHi || '' 
+                },
+                rubric: { en: '', hi: '' },
+                subrubric: { en: '', hi: '' },
+                modalities: { aggravation: [], amelioration: [] },
+                synonyms: { en: [], hi: [] },
+                medicines: {}
+              });
+              setNewMedicineInput({ name: '', grade: 3 });
             }}
             className="flex items-center gap-1.5 text-xs bg-[#062E6F] hover:bg-[#042050] text-white px-4 py-2 rounded-lg font-bold shadow-sm transition-colors"
           >
@@ -299,114 +404,290 @@ export default function RubricManagement({ lang = 'en' }) {
         </div>
       )}
 
-      {/* Add New Rubric Form */}
+      {/* Add New Rubric Modal with Blurred Backdrop */}
       {isAddingNew && (
-        <div className="surface p-6 space-y-4 border-2 border-[#062E6F]/20 rounded-xl">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-              <Plus className="h-4 w-4 text-[#062E6F]" />
-              {t('Add New Rubric', 'नई रुब्रिक जोड़ें')}
-            </h3>
-            <button onClick={() => setIsAddingNew(false)} className="text-slate-400 hover:text-slate-600">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">{t('Chapter (English)', 'अध्याय (अंग्रेज़ी)')}</label>
-              <input
-                type="text"
-                value={newRubric.chapter.en}
-                onChange={(e) => setNewRubric(prev => ({...prev, chapter: {...prev.chapter, en: e.target.value}}))}
-                placeholder={t('e.g., Mind, Head, Stomach', 'उदा., मन, सिर, पेट')}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#062E6F]/30 outline-none"
-              />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-in fade-in duration-200">
+          {/* Backdrop with Blur */}
+          <div 
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" 
+            onClick={() => setIsAddingNew(false)} 
+          />
+
+          {/* Modal Container Card */}
+          <div className="relative bg-white border border-slate-200/80 rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh] z-10 overflow-hidden ring-1 ring-slate-900/5">
+            
+            {/* Pinned Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#062E6F]/10 flex items-center justify-center text-[#062E6F] shrink-0">
+                  <Plus className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800 leading-snug">
+                    {t('Add New Rubric', 'नई रुब्रिक जोड़ें')}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {t('Create a new rubric in your repertory database', 'अपनी रेपर्टरी डेटाबेस में नई रुब्रिक दर्ज करें')}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsAddingNew(false)} 
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">{t('Chapter (Hindi)', 'अध्याय (हिंदी)')}</label>
-              <input
-                type="text"
-                value={newRubric.chapter.hi}
-                onChange={(e) => setNewRubric(prev => ({...prev, chapter: {...prev.chapter, hi: e.target.value}}))}
-                placeholder={t('e.g., मन, सिर, पेट', 'उदा., मन, सिर, पेट')}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#062E6F]/30 outline-none"
-              />
+            
+            {/* Scrollable Form Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 thin-scroll bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{t('Target Repertory', 'लक्ष्य रेपर्टरी')}</label>
+                  <select
+                    value={newRubric.repertoryId}
+                    onChange={(e) => setNewRubric(prev => ({...prev, repertoryId: e.target.value}))}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  >
+                    <option value="">{t('Select Repertory', 'रेपर्टरी चुनें')}</option>
+                    {repertories.map(rep => (
+                      <option key={rep._id} value={rep._id}>
+                        {rep.name?.en || rep.name || 'Unnamed'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{t('Chapter (English)', 'अध्याय (अंग्रेज़ी)')}</label>
+                  <input
+                    type="text"
+                    value={newRubric.chapter.en}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const match = chapters.find(c => c.chapterEn?.toLowerCase() === val.trim().toLowerCase());
+                      setNewRubric(prev => ({
+                        ...prev,
+                        chapter: {
+                          en: val,
+                          hi: match ? match.chapterHi : prev.chapter.hi
+                        }
+                      }));
+                    }}
+                    placeholder={t('e.g., Mind, Head, Stomach', 'उदा., मन, सिर, पेट')}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{t('Chapter (Hindi)', 'अध्याय (हिंदी)')}</label>
+                  <input
+                    type="text"
+                    value={newRubric.chapter.hi}
+                    onChange={(e) => setNewRubric(prev => ({...prev, chapter: {...prev.chapter, hi: e.target.value}}))}
+                    placeholder={t('e.g., मन, सिर, पेट', 'उदा., मन, सिर, पेट')}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{t('Rubric Name (English)', 'रुब्रिक नाम (अंग्रेज़ी)')}</label>
+                  <input
+                    type="text"
+                    value={newRubric.rubric.en}
+                    onChange={(e) => setNewRubric(prev => ({...prev, rubric: {...prev.rubric, en: e.target.value}}))}
+                    placeholder={t('e.g., Anger, easily provoked', 'उदा., क्रोध, आसानी से भड़कना')}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{t('Rubric Name (Hindi)', 'रुब्रिक नाम (हिंदी)')}</label>
+                  <input
+                    type="text"
+                    value={newRubric.rubric.hi}
+                    onChange={(e) => setNewRubric(prev => ({...prev, rubric: {...prev.rubric, hi: e.target.value}}))}
+                    placeholder={t('e.g., क्रोध, आसानी से भड़कना', 'उदा., क्रोध, आसानी से भड़कना')}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{t('Subrubric/Details (English)', 'सबरुब्रिक/विवरण (अंग्रेज़ी)')}</label>
+                  <input
+                    type="text"
+                    value={newRubric.subrubric.en}
+                    onChange={(e) => setNewRubric(prev => ({...prev, subrubric: {...prev.subrubric, en: e.target.value}}))}
+                    placeholder={t('e.g., morning; from contradiction', 'उदा., सुबह; विरोध से')}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {t('Aggravation Factors (↓ worse)', 'एग्रावेशन कारक (↓ बदतर)')}
+                    <span className="text-slate-400 font-normal ml-1">({t('comma-separated', 'अल्पविराम से अलग करें')})</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newRubric.modalities.aggravation.join(', ')}
+                    onChange={(e) => setNewRubric(prev => ({...prev, modalities: {...prev.modalities, aggravation: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}}))}
+                    placeholder={t('e.g., morning, noise, cold, stress', 'उदा., सुबह, शोर, ठंड, तनाव')}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {t('Amelioration Factors (↑ better)', 'एमेलियोरेशन कारक (↑ बेहतर)')}
+                    <span className="text-slate-400 font-normal ml-1">({t('comma-separated', 'अल्पविराम से अलग करें')})</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newRubric.modalities.amelioration.join(', ')}
+                    onChange={(e) => setNewRubric(prev => ({...prev, modalities: {...prev.modalities, amelioration: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}}))}
+                    placeholder={t('e.g., open air, warmth, rest', 'उदा., खुली हवा, गर्मी, आराम')}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {t('Synonyms/Related Terms', 'समानार्थी/संबंधित शब्द')}
+                    <span className="text-slate-400 font-normal ml-1">({t('comma-separated', 'अल्पविराम से अलग करें')})</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newRubric.synonyms.en.join(', ')}
+                    onChange={(e) => setNewRubric(prev => ({...prev, synonyms: {...prev.synonyms, en: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}}))}
+                    placeholder={t('e.g., irritable, wrathful, furious', 'उदा., चिड़चिड़ा, क्रूर, क्रोधित')}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:bg-white focus:border-[#062E6F] focus:ring-2 focus:ring-[#062E6F]/20 transition-all outline-none"
+                  />
+                </div>
+
+                {/* Medicines Section */}
+                <div className="md:col-span-2 pt-4 border-t border-slate-200">
+                  <label className="block text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                    {t('Associated Medicines (Remedies)', 'संबंधित दवाएं (रेमेडीज़)')}
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full font-semibold">
+                      {Object.keys(newRubric.medicines || {}).length}
+                    </span>
+                  </label>
+                  
+                  {/* Medicine Pills */}
+                  {Object.keys(newRubric.medicines || {}).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {Object.entries(newRubric.medicines || {}).map(([medName, grade]) => {
+                        const gradeStyles = grade === 3 
+                          ? 'bg-red-50 text-red-700 border-red-200' 
+                          : grade === 2 
+                          ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                          : 'bg-blue-50 text-blue-700 border-blue-200';
+                        
+                        return (
+                          <div 
+                            key={medName} 
+                            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold ${gradeStyles}`}
+                          >
+                            <span 
+                              onClick={() => {
+                                const nextGrade = grade >= 3 ? 1 : grade + 1;
+                                setNewRubric(prev => ({
+                                  ...prev,
+                                  medicines: { ...prev.medicines, [medName]: nextGrade }
+                                }));
+                              }}
+                              className="cursor-pointer flex items-center gap-1 hover:opacity-75"
+                              title={t('Click to cycle grade', 'ग्रेड बदलने के लिए क्लिक करें')}
+                            >
+                              <span>{medName}</span>
+                              <span className="text-[10px] opacity-80 bg-white/70 px-1 rounded font-bold">{grade}°</span>
+                            </span>
+                            <button 
+                              onClick={() => {
+                                const updated = { ...newRubric.medicines };
+                                delete updated[medName];
+                                setNewRubric(prev => ({ ...prev, medicines: updated }));
+                              }}
+                              className="opacity-60 hover:opacity-100 ml-0.5 p-0.5"
+                              title={t('Remove', 'हटाएं')}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Add Medicine Input */}
+                  <div className="flex items-center gap-2 bg-slate-50/50 p-2 rounded-xl border border-slate-200">
+                    <input 
+                      type="text"
+                      value={newMedicineInput.name}
+                      onChange={(e) => setNewMedicineInput(prev => ({ ...prev, name: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newMedicineInput.name.trim()) {
+                          setNewRubric(prev => ({
+                            ...prev,
+                            medicines: { ...prev.medicines, [newMedicineInput.name.trim()]: newMedicineInput.grade }
+                          }));
+                          setNewMedicineInput({ name: '', grade: 3 });
+                        }
+                      }}
+                      placeholder={t('Medicine name (e.g., Acon., Nux-v)...', 'दवा का नाम (उदा. Acon., Nux-v)...')}
+                      className="flex-1 text-xs px-3 py-2 outline-none bg-white border border-slate-200 rounded-lg text-slate-800 focus:border-[#062E6F]"
+                    />
+                    <select 
+                      value={newMedicineInput.grade}
+                      onChange={(e) => setNewMedicineInput(prev => ({ ...prev, grade: Number(e.target.value) }))}
+                      className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none text-slate-700 focus:border-[#062E6F]"
+                    >
+                      <option value={3}>3° ({t('High', 'उच्च')})</option>
+                      <option value={2}>2° ({t('Medium', 'मध्यम')})</option>
+                      <option value={1}>1° ({t('Low', 'निम्न')})</option>
+                    </select>
+                    <button
+                      onClick={() => {
+                        if (newMedicineInput.name.trim()) {
+                          setNewRubric(prev => ({
+                            ...prev,
+                            medicines: { ...prev.medicines, [newMedicineInput.name.trim()]: newMedicineInput.grade }
+                          }));
+                          setNewMedicineInput({ name: '', grade: 3 });
+                        }
+                      }}
+                      className="px-3 py-2 bg-[#062E6F] hover:bg-[#042050] text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      {t('Add', 'जोड़ें')}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1.5 italic">
+                    {t('Press Enter or click Add to include medicines in this rubric', 'इस रुब्रिक में दवाएं शामिल करने के लिए Enter दबाएं या Add क्लिक करें')}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">{t('Rubric Name (English)', 'रुब्रिक नाम (अंग्रेज़ी)')}</label>
-              <input
-                type="text"
-                value={newRubric.rubric.en}
-                onChange={(e) => setNewRubric(prev => ({...prev, rubric: {...prev.rubric, en: e.target.value}}))}
-                placeholder={t('e.g., Anger, easily provoked', 'उदा., क्रोध, आसानी से भड़कना')}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#062E6F]/30 outline-none"
-              />
+            
+            {/* Pinned Modal Footer Actions */}
+            <div className="px-6 py-4 bg-slate-50/90 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+              <button 
+                onClick={() => setIsAddingNew(false)} 
+                className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-colors shadow-sm"
+              >
+                {t('Cancel', 'रद्द करें')}
+              </button>
+              <button
+                onClick={handleAddRubric}
+                disabled={saving}
+                className="px-5 py-2.5 bg-[#062E6F] hover:bg-[#042050] text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {t('Add Rubric', 'रुब्रिक जोड़ें')}
+              </button>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">{t('Rubric Name (Hindi)', 'रुब्रिक नाम (हिंदी)')}</label>
-              <input
-                type="text"
-                value={newRubric.rubric.hi}
-                onChange={(e) => setNewRubric(prev => ({...prev, rubric: {...prev.rubric, hi: e.target.value}}))}
-                placeholder={t('e.g., क्रोध, आसानी से भड़कना', 'उदा., क्रोध, आसानी से भड़कना')}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#062E6F]/30 outline-none"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-600 mb-1">{t('Subrubric/Details (English)', 'सबरुब्रिक/विवरण (अंग्रेज़ी)')}</label>
-              <input
-                type="text"
-                value={newRubric.subrubric.en}
-                onChange={(e) => setNewRubric(prev => ({...prev, subrubric: {...prev.subrubric, en: e.target.value}}))}
-                placeholder={t('e.g., morning; from contradiction', 'उदा., सुबह; विरोध से')}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#062E6F]/30 outline-none"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-600 mb-1">{t('Aggravation Factors (↓ worse)', 'एग्रावेशन कारक (↓ बदतर)')} — {t('comma-separated', 'अल्पविराम से अलग करें')}</label>
-              <input
-                type="text"
-                value={newRubric.modalities.aggravation.join(', ')}
-                onChange={(e) => setNewRubric(prev => ({...prev, modalities: {...prev.modalities, aggravation: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}}))}
-                placeholder={t('e.g., morning, noise, cold, stress', 'उदा., सुबह, शोर, ठंड, तनाव')}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#062E6F]/30 outline-none"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-600 mb-1">{t('Amelioration Factors (↑ better)', 'एमेलियोरेशन कारक (↑ बेहतर)')} — {t('comma-separated', 'अल्पविराम से अलग करें')}</label>
-              <input
-                type="text"
-                value={newRubric.modalities.amelioration.join(', ')}
-                onChange={(e) => setNewRubric(prev => ({...prev, modalities: {...prev.modalities, amelioration: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}}))}
-                placeholder={t('e.g., open air, warmth, rest', 'उदा., खुली हवा, गर्मी, आराम')}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#062E6F]/30 outline-none"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-600 mb-1">{t('Synonyms/Related Terms (English)', 'समानार्थी/संबंधित शब्द (अंग्रेज़ी)')} — {t('comma-separated', 'अल्पविराम से अलग करें')}</label>
-              <input
-                type="text"
-                value={newRubric.synonyms.en.join(', ')}
-                onChange={(e) => setNewRubric(prev => ({...prev, synonyms: {...prev.synonyms, en: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}}))}
-                placeholder={t('e.g., irritable, wrathful, furious', 'उदा., चिड़चिड़ा, क्रूर, क्रोधित')}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-[#062E6F]/30 outline-none"
-              />
-            </div>
-          </div>
-          
-          <div className="flex gap-2 pt-2 border-t border-slate-100">
-            <button
-              onClick={handleAddRubric}
-              disabled={saving}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5"
-            >
-              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-              {t('Add Rubric', 'रुब्रिक जोड़ें')}
-            </button>
-            <button onClick={() => setIsAddingNew(false)} className="px-3 py-2 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg">
-              {t('Cancel', 'रद्द करें')}
-            </button>
+
           </div>
         </div>
       )}
@@ -580,6 +861,109 @@ export default function RubricManagement({ lang = 'en' }) {
                         placeholder={t('e.g., irritable, wrathful, furious', 'उदा., चिड़चिड़ा, क्रूर, क्रोधित')}
                       />
                     </div>
+
+                    {/* Medicines Section in Edit Form */}
+                    <div className="md:col-span-2 pt-4 border-t border-slate-200">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                        {t('Associated Medicines (Remedies)', 'संबंधित दवाएं (रेमेडीज़)')}
+                        <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full font-semibold">
+                          {Object.keys(editForm.medicines || {}).length}
+                        </span>
+                      </label>
+                      
+                      {/* Medicine Pills */}
+                      {Object.keys(editForm.medicines || {}).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {Object.entries(editForm.medicines || {}).map(([medName, grade]) => {
+                            const gradeStyles = grade === 3 
+                              ? 'bg-red-50 text-red-700 border-red-200' 
+                              : grade === 2 
+                              ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                              : 'bg-blue-50 text-blue-700 border-blue-200';
+                            
+                            return (
+                              <div 
+                                key={medName} 
+                                className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold ${gradeStyles}`}
+                              >
+                                <span 
+                                  onClick={() => {
+                                    const nextGrade = grade >= 3 ? 1 : grade + 1;
+                                    setEditForm(prev => ({
+                                      ...prev,
+                                      medicines: { ...prev.medicines, [medName]: nextGrade }
+                                    }));
+                                  }}
+                                  className="cursor-pointer flex items-center gap-1 hover:opacity-75"
+                                  title={t('Click to cycle grade', 'ग्रेड बदलने के लिए क्लिक करें')}
+                                >
+                                  <span>{medName}</span>
+                                  <span className="text-[10px] opacity-80 bg-white/70 px-1 rounded font-bold">{grade}°</span>
+                                </span>
+                                <button 
+                                  onClick={() => {
+                                    const updated = { ...editForm.medicines };
+                                    delete updated[medName];
+                                    setEditForm(prev => ({ ...prev, medicines: updated }));
+                                  }}
+                                  className="opacity-60 hover:opacity-100 ml-0.5 p-0.5"
+                                  title={t('Remove', 'हटाएं')}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Add Medicine Input */}
+                      <div className="flex items-center gap-2 bg-slate-50/50 p-2 rounded-xl border border-slate-200">
+                        <input 
+                          type="text"
+                          value={editMedicineInput.name}
+                          onChange={(e) => setEditMedicineInput(prev => ({ ...prev, name: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && editMedicineInput.name.trim()) {
+                              setEditForm(prev => ({
+                                ...prev,
+                                medicines: { ...prev.medicines, [editMedicineInput.name.trim()]: editMedicineInput.grade }
+                              }));
+                              setEditMedicineInput({ name: '', grade: 3 });
+                            }
+                          }}
+                          placeholder={t('Medicine name (e.g., Acon., Nux-v)...', 'दवा का नाम (उदा. Acon., Nux-v)...')}
+                          className="flex-1 text-xs px-3 py-2 outline-none bg-white border border-slate-200 rounded-lg text-slate-800 focus:border-[#062E6F]"
+                        />
+                        <select 
+                          value={editMedicineInput.grade}
+                          onChange={(e) => setEditMedicineInput(prev => ({ ...prev, grade: Number(e.target.value) }))}
+                          className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none text-slate-700 focus:border-[#062E6F]"
+                        >
+                          <option value={3}>3° ({t('High', 'उच्च')})</option>
+                          <option value={2}>2° ({t('Medium', 'मध्यम')})</option>
+                          <option value={1}>1° ({t('Low', 'निम्न')})</option>
+                        </select>
+                        <button
+                          onClick={() => {
+                            if (editMedicineInput.name.trim()) {
+                              setEditForm(prev => ({
+                                ...prev,
+                                medicines: { ...prev.medicines, [editMedicineInput.name.trim()]: editMedicineInput.grade }
+                              }));
+                              setEditMedicineInput({ name: '', grade: 3 });
+                            }
+                          }}
+                          className="px-3 py-2 bg-[#062E6F] hover:bg-[#042050] text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                        >
+                          <Plus className="h-3 w-3" />
+                          {t('Add', 'जोड़ें')}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1.5 italic">
+                        {t('Press Enter or click Add to include medicines in this rubric', 'इस रुब्रिक में दवाएं शामिल करने के लिए Enter दबाएं या Add क्लिक करें')}
+                      </p>
+                    </div>
                   </div>
                   
                   <div className="flex gap-2 pt-2 border-t border-slate-100">
@@ -640,6 +1024,91 @@ export default function RubricManagement({ lang = 'en' }) {
                           </div>
                         </div>
                       )}
+
+                      {/* Associated Remedies Section */}
+                      <div className="pt-2 border-t border-slate-200/60 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <span>{t('Associated Remedies (Medicines)', 'संबंधित दवाएं (रेमेडीज़)')}</span>
+                            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full font-semibold">
+                              {Object.keys(rubric.medicines instanceof Map ? Object.fromEntries(rubric.medicines) : (rubric.medicines || {})).length}
+                            </span>
+                          </p>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> 3° {t('High', 'उच्च')}</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> 2° {t('Medium', 'मध्यम')}</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> 1° {t('Low', 'निम्न')}</span>
+                          </div>
+                        </div>
+
+                        {/* Remedies Pills */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(rubric.medicines instanceof Map ? Object.fromEntries(rubric.medicines) : (rubric.medicines || {})).map(([medName, grade]) => {
+                            const gradeStyles = grade === 3 
+                              ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' 
+                              : grade === 2 
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' 
+                              : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100';
+                            
+                            return (
+                              <div 
+                                key={medName} 
+                                className={`group flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${gradeStyles}`}
+                                title={t('Click to cycle grade (1° -> 2° -> 3°)', 'ग्रेड बदलने के लिए क्लिक करें (1° -> 2° -> 3°)')}
+                              >
+                                <span onClick={() => handleCycleRemedyGrade(rubric, medName, grade)} className="flex items-center gap-1">
+                                  <span>{medName}</span>
+                                  <span className="text-[10px] opacity-80 bg-white/70 px-1 rounded font-bold">{grade}°</span>
+                                </span>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleRemoveRemedyFromRubric(rubric, medName); }}
+                                  className="opacity-60 hover:opacity-100 hover:text-red-800 ml-0.5 p-0.5"
+                                  title={t('Remove remedy', 'दवा हटाएं')}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                          {Object.keys(rubric.medicines instanceof Map ? Object.fromEntries(rubric.medicines) : (rubric.medicines || {})).length === 0 && (
+                            <span className="text-xs text-slate-400 italic">{t('No medicines added to this rubric yet.', 'इस रुब्रिक में अभी कोई दवा नहीं जोड़ी गई है।')}</span>
+                          )}
+                        </div>
+
+                        {/* Add New Remedy Bar */}
+                        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm mt-2">
+                          <input 
+                            type="text"
+                            value={addingRemedy[rubric._id]?.name || ''}
+                            onChange={(e) => setAddingRemedy(prev => ({
+                              ...prev,
+                              [rubric._id]: { ...(prev[rubric._id] || {}), name: e.target.value }
+                            }))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddRemedyToRubric(rubric); }}
+                            placeholder={t('Add remedy name (e.g. Acon., Nux-v)...', 'दवा का नाम जोड़ें (उदा. Acon., Nux-v)...')}
+                            className="flex-1 text-xs px-2 py-1 outline-none bg-transparent text-slate-800"
+                          />
+                          <select 
+                            value={addingRemedy[rubric._id]?.grade || 3}
+                            onChange={(e) => setAddingRemedy(prev => ({
+                              ...prev,
+                              [rubric._id]: { ...(prev[rubric._id] || {}), grade: Number(e.target.value) }
+                            }))}
+                            className="text-xs font-bold bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 outline-none text-slate-700"
+                          >
+                            <option value={3}>3° ({t('High', 'उच्च')})</option>
+                            <option value={2}>2° ({t('Medium', 'मध्यम')})</option>
+                            <option value={1}>1° ({t('Low', 'निम्न')})</option>
+                          </select>
+                          <button
+                            onClick={() => handleAddRemedyToRubric(rubric)}
+                            className="px-3 py-1 bg-[#062E6F] hover:bg-[#042050] text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-colors shrink-0"
+                          >
+                            <Plus className="h-3 w-3" />
+                            {t('Add Remedy', 'दवा जोड़ें')}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

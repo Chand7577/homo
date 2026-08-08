@@ -8,9 +8,11 @@ import PersistentNumberPicker from './NumberPicker';
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const MEDICINE_TYPES = [
+  { id: 'medicine_form', label: 'Medicine Form', labelHi: 'दवा का रूप' },
   { id: 'dilution', label: 'Dilution (Potency)', labelHi: 'डाइल्यूशन (पोटेंसी)' },
   { id: 'mother_tincture', label: 'Mother Tincture (Q)', labelHi: 'मदर टिंचर (Q)' },
   { id: 'biochemic', label: 'Bio Combination (Trituration)', labelHi: 'बायो कॉम्बिनेशन (ट्रिट्यूरेशन)' },
+  { id: 'patent', label: 'Patent Medicine', labelHi: 'पेटेंट दवा' },
 ];
 
 const POTENCIES_DILUTION = ['2', '3', '6', '30', '200', '1M', '10M', 'CM', 'LM', 'Patent'];
@@ -44,7 +46,7 @@ const TEASPOON_OPTIONS = [
 
 const newMedLine = () => ({
   id: Date.now() + Math.random(),
-  type: 'dilution',
+  type: 'medicine_form',
   name: '',
   search: '',
   showDropdown: false,
@@ -346,7 +348,6 @@ export default function PrescriptionForm({
         doctorRegistration: doctor.registrationNumber,
         doctorExperience: doctor.experience,
         analysisId: editingPrescription?.analysisId || analysisData?.analysisId || null,
-        symptoms: editingPrescription?.symptoms || analysisData?.symptoms || [],
       };
 
       let res;
@@ -946,7 +947,7 @@ export default function PrescriptionForm({
                       {TEASPOON_OPTIONS.map(tsp => (
                         <button type="button" key={tsp.value} onClick={() => updateMed(med.id, 'teaspoons', med.teaspoons === tsp.value ? '' : tsp.value)}
                           className={`px-1.5 py-1 text-[10px] font-bold transition-all min-h-[32px] whitespace-nowrap ${med.teaspoons === tsp.value ? 'bg-amber-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
-                          {tsp.value}
+                          {lang === 'en' ? tsp.en : tsp.hi}
                         </button>
                       ))}
                     </div>

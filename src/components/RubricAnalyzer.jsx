@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BookOpen, Mic, Brain, BarChart2, FileText, ChevronRight, AlertCircle, Loader2, CheckCircle2, Upload, X, ChevronDown, Search, RefreshCw, Square, Sparkles } from 'lucide-react';
 import VoiceInput from './VoiceInput';
 import RepertoryChart from './RepertoryChart';
@@ -190,11 +190,16 @@ export default function RubricAnalyzer({ currentUser = null, lang = 'en', patien
   }, []);
 
   // Load analysis from history when loadedAnalysis prop changes
+  // Track the last loaded analysis ID to prevent reloading the same one
+  const lastLoadedIdRef = useRef(null);
+  
   useEffect(() => {
-    if (loadedAnalysis) {
+    if (loadedAnalysis && loadedAnalysis._id !== lastLoadedIdRef.current) {
       console.log('📊 Loading existing analysis:', loadedAnalysis._id);
       console.log('   - matchedRubrics:', loadedAnalysis.matchedRubrics?.length || 0);
       console.log('   - medicines:', loadedAnalysis.medicineDistribution?.length || 0);
+      
+      lastLoadedIdRef.current = loadedAnalysis._id;
       
       // Clear any loading/analyzing state
       setAnalyzing(false);
@@ -240,6 +245,9 @@ export default function RubricAnalyzer({ currentUser = null, lang = 'en', patien
       
       // Jump to Step 4 (Results)
       setStep(4);
+    } else if (!loadedAnalysis) {
+      // Clear the ref when loadedAnalysis is cleared
+      lastLoadedIdRef.current = null;
     }
   }, [loadedAnalysis, repertories]);
 
@@ -349,6 +357,9 @@ export default function RubricAnalyzer({ currentUser = null, lang = 'en', patien
       console.log('❌ Cannot run analysis - missing data');
       return;
     }
+    
+    // Clear the loaded analysis tracking so useEffect doesn't reload old data
+    lastLoadedIdRef.current = null;
     
     setAnalyzing(true); setAnalysisError(''); setAnalysisResult(null);
     setStep(3); // Go to AI Analysis step
@@ -1532,6 +1543,7 @@ export default function RubricAnalyzer({ currentUser = null, lang = 'en', patien
             <div className="flex-1 overflow-hidden relative">
               <RepertoryChart 
                 matchedRubrics={analysisResult?.matchedRubrics || []} 
+                aiUsed={analysisResult?.aiUsed}
                 lang={lang} 
                 onUpdateGrade={handleUpdateGrade} 
                 selectedRubricId={selectedRubricId}
@@ -1576,6 +1588,7 @@ export default function RubricAnalyzer({ currentUser = null, lang = 'en', patien
           <div className="flex-1 overflow-hidden relative">
             <RepertoryChart 
               matchedRubrics={analysisResult?.matchedRubrics || []} 
+              aiUsed={analysisResult?.aiUsed}
               lang={lang} 
               onUpdateGrade={handleUpdateGrade} 
               selectedRubricId={selectedRubricId}

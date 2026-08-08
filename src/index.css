@@ -269,6 +269,34 @@
   transform: none;
 }
 
+/* Secondary Button - Outlined style for secondary actions */
+.secondary-btn {
+  background-color: #ffffff;
+  color: #062E6F;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  border: 2px solid #062E6F;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  min-height: 44px;
+}
+.secondary-btn:hover {
+  background-color: #062E6F;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(6, 46, 111, 0.25);
+}
+.secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Custom Scrollbar for Ledger Lists */
 ::-webkit-scrollbar {
   width: 8px;
