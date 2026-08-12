@@ -7,7 +7,8 @@ const KentOCRTab = ({ lang }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+  const [startPage, setStartPage] = useState('');
+  const [endPage, setEndPage] = useState('');
   const extractionMode = 'pdf';
   
   const fileInputRef = useRef(null);
@@ -102,28 +103,28 @@ const KentOCRTab = ({ lang }) => {
     setError(null);
 
     const formData = new FormData();
+    const isPdfFile = file.name.toLowerCase().endsWith('.pdf');
     
-    // Different endpoints for different modes
-    const endpoint = extractionMode === 'pdf' 
-      ? 'materia-medica-extract/upload'
-      : 'kent-ocr/upload';
+    const endpoint = isPdfFile ? 'kent-ocr/upload-pdf' : 'kent-ocr/upload';
+    const fieldName = isPdfFile ? 'pdf' : 'page';
     
-    const fieldName = extractionMode === 'pdf' ? 'pdf' : 'page';
     formData.append(fieldName, file);
+    if (startPage) formData.append('startPage', startPage);
+    if (endPage) formData.append('endPage', endPage);
+    formData.append('useAiVision', 'true');
 
     try {
       // Simulate progress for better UX
       const progressInterval = setInterval(() => {
         setProgress(prev => {
           if (prev >= 90) return prev;
-          return prev + (extractionMode === 'pdf' ? 3 : 5); // Slower for PDF
+          return prev + (isPdfFile ? 2 : 5);
         });
-      }, extractionMode === 'pdf' ? 2000 : 1000);
+      }, isPdfFile ? 2000 : 1000);
 
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
       const response = await api.post(`/${endpoint}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 300000 // 5 minutes timeout for heavy OCR & AI translation
+        timeout: 3600000 // 60 minutes timeout for PDF chapter extraction
       });
 
       clearInterval(progressInterval);
@@ -142,6 +143,8 @@ const KentOCRTab = ({ lang }) => {
     setFile(null);
     setResult(null);
     setError(null);
+    setStartPage('');
+    setEndPage('');
     setProgress(0);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -211,6 +214,34 @@ const KentOCRTab = ({ lang }) => {
                   <p className="text-sm text-slate-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
                 </div>
               </div>
+
+              {file.name.toLowerCase().endsWith('.pdf') && !isUploading && (
+                <div className="max-w-xs mx-auto p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2 text-left" onClick={(e) => e.stopPropagation()}>
+                  <p className="text-xs font-semibold text-slate-700">📄 Optional: Chapter Page Range</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-[10px] text-slate-500 font-medium block mb-0.5">Start Page</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 68"
+                        value={startPage}
+                        onChange={(e) => setStartPage(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#062E6F]"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-slate-500 font-medium block mb-0.5">End Page</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 85"
+                        value={endPage}
+                        onChange={(e) => setEndPage(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#062E6F]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {!isUploading ? (
                 <div className="flex justify-center gap-4">
