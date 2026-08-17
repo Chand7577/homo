@@ -1,0 +1,226 @@
+def intelligent_rubric_search(request):
+    """
+    Intelligent rubric search with body-part routing and Python-side scoring.
+    
+    Strategy:
+    - Detect body-part keywords (head, eyes, ears, throat, stomach...) from the query
+    - If a body part is found: restrict DB search to that chapter ONLY
+    - Fetch candidates using only name/synonym JOINs (no modality JOINs to avoid fan-out)
+    - Score each rubric in Python: name match > modality match > synonym match > description match
+    - Return top 10 by score
+    """
+    if request.method != "GET":
+        return JsonResponse({'error': 'GET method required'}, status=405)
+
+    doctor_id = request.session.get('doctor_id')
+    if not doctor_id:
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
+
+    try:
+        import re
+        query = request.GET.get('query', '').strip()
+
+        if not query or len(query) < 2:
+            return JsonResponse({
+                'success': True,
+                'rubrics': [],
+                'message': 'Query too short. Please enter at least 2 characters.'
+            })
+
+        # Expand common compound symptoms to help routing
+        query = query.lower()
+        query = query.replace('headache', 'head pain')
+        query = query.replace('stomachache', 'stomach pain')
+        query = query.replace('backache', 'back pain')
+        query = query.replace('toothache', 'teeth pain')
+        query = query.replace('earache', 'ear pain')
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 1. TOKENISATION — strip filler words
+        # ─────────────────────────────────────────────────────────────────────
+        filler_words = {
+            'i', 'have', 'a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'am',
+            'was', 'were', 'been', 'my', 'mine', 'me', 'he', 'she', 'it', 'they',
+            'them', 'their', 'we', 'us', 'our', 'in', 'on', 'at', 'to', 'for',
+            'with', 'about', 'of', 'from', 'by', 'as', 'that', 'this', 'these',
+            'those', 'doctor', 'please', 'help', 'sir', 'madam', 'suffering',
+            'since', 'days', 'months', 'years', 'feeling', 'feel', 'when', 'what',
+            'where', 'why', 'how', 'who', 'can', 'could', 'would', 'should',
+            'will', 'very', 'much', 'too', 'lot', 'getting', 'got',
+            'में', 'का', 'की', 'से', 'को', 'पर', 'और', 'है', 'हैं', 'था', 'थी', 'थे',
+            'वाला', 'वाली', 'वाले', 'के', 'लिए', 'करता', 'करती', 'करते'
+        }
+        tokens = [t for t in re.split(r'[\s,।|.:;!\-?–—]+', query.lower()) if t]
+        search_words = [w for w in tokens if len(w) >= 2 and w not in filler_words]
+        if not search_words:
+            search_words = tokens if tokens else [query.lower()]
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 2. BODY-PART ROUTING
+        #    Maps common English keywords → chapter names in the DB
+        # ─────────────────────────────────────────────────────────────────────
+        BODY_PART_MAP = {
+            'head': 'Head',
+            'headache': 'Head',
+            'vertigo': 'Vertigo',
+            'dizziness': 'Vertigo',
+            'dizzy': 'Vertigo',
+            'migraine': 'Head',
+            'mind': 'Mind',
+            'mental': 'Mind',
+            'grief': 'Mind',
+            'anger': 'Mind',
+            'anxiety': 'Mind',
+            'fear': 'Mind',
+            'depression': 'Mind',
+            'sadness': 'Mind',
+            'eye': 'Eyes',
+            'eyes': 'Eyes',
+            'ear': 'Ears',
+            'ears': 'Ears',
+            'nose': 'Nose',
+            'nasal': 'Nose',
+            'throat': 'Throat',
+            'tonsil': 'Throat',
+            'tonsils': 'Throat',
+            'stomach': 'Stomach',
+            'nausea': 'Stomach',
+            'vomiting': 'Stomach',
+            'vomit': 'Stomach',
+            'indigestion': 'Stomach',
+            'belching': 'Stomach',
+            'burping': 'Stomach',
+            'heartburn': 'Stomach',
+            'appetite': 'Stomach',
+            'fasting': 'Stomach',
+            'hunger': 'Stomach',
+            'thirst': 'Stomach',
+            'abdomen': 'Abdomen',
+            'abdominal': 'Abdomen',
+            'bloating': 'Abdomen',
+            'flatulence': 'Abdomen',
+            'gas': 'Abdomen',
+            'gastric': 'Stomach',
+            'diarrhoea': 'Rectum',
+            'diarrhea': 'Rectum',
+            'constipation': 'Rectum',
+            'rectum': 'Rectum',
+            'rectal': 'Rectum',
+            'face': 'Face',
+            'back': 'Back',
+            'heart': 'Heart',
+            'chest': 'Chest',
+            'skin': 'Skin',
+            'hands': 'Extremities',
+            'legs': 'Extremities',
+            'extremities': 'Extremities',
+            'knee': 'Extremities',
+            'shoulder': 'Extremities',
+            'joint': 'Extremities',
+            'joints': 'Extremities',
+            'generalities': 'Generalities',
+            'weakness': 'Generalities',
+            'fatigue': 'Generalities',
+            'fever': 'Generalities',
+            'sleep': 'Generalities',
+            'urine': 'Urine',
+            'urination': 'Urine',
+            'bladder': 'Bladder',
+            'kidney': 'Kidneys',
+            'kidneys': 'Kidneys',
+            'diabetes': 'Clinical',
+            'diabetic': 'Clinical',
+            'endocrine': 'Clinical',
+            'endrocrine': 'Clinical',
+        }
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 3. HYPHEN-SEPARATED SEARCH (Removed - standard logic handles this better)
+        # ─────────────────────────────────────────────────────────────────────
+        normalized_query = query.replace('–', '-').replace('—', '-')
+        # if '-' in normalized_query:
+        #     parts = [p.strip() for p in normalized_query.split('-', 1)]
+        #     if len(parts) == 2 and parts[0] and parts[1]:
+        #         main_part, sub_part = parts
+        # ... logic removed because standard word-based routing + exact path match
+        # handles "Chapter - Symptom" and "Symptom - Modality" perfectly.
+
+        detected_chapters = []
+        symptom_words = []  # words that are NOT the body part
+
+        for word in search_words:
+            chapter = BODY_PART_MAP.get(word)
+            if chapter:
+                if chapter not in detected_chapters:
+                    detected_chapters.append(chapter)
+            else:
+                symptom_words.append(word)
+
+        # Track if we have actual symptom words beyond the body part
+        has_symptom_words = bool(symptom_words)
+        detected_chapter = detected_chapters[0] if detected_chapters else None
+
+        # For scoring: use all search words
+        scoring_words = search_words
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 5. BUILD DB FILTER — NO modality JOINs (prevents fan-out)
+        #    Only use name / synonym tables in the filter
+        # ─────────────────────────────────────────────────────────────────────
+        base_qs = Rubric.objects.filter(is_active=True).exclude(name__in=['', '""']).select_related(
+            'parent', 'parent__parent', 'parent__parent__parent'
+        ).annotate(
+            med_count=Count('medicine_grades', distinct=True)
+        )
+
+        # Removed strict chapter filtering to allow finding symptoms in other chapters
+        # (e.g. "urination" rubrics might be in SIDES or Red Line chapters)
+        pass
+
+        if not has_symptom_words and len(search_words) > 0:
+            symptom_words = search_words
+            has_symptom_words = True
+
+        if has_symptom_words:
+            # Also filter by remaining symptom keywords (in name or synonym)
+            symptom_q = Q()
+            for word in symptom_words:
+                word_lower = word.lower()
+                word_q = (
+                    Q(name__icontains=word_lower) |
+                    Q(name_hindi__icontains=word_lower) |
+                    Q(parent__name__icontains=word_lower) |
+                    Q(parent__parent__name__icontains=word_lower) |
+                    Q(synonyms__synonym__icontains=word_lower) |
+                    Q(modalities__name__icontains=word_lower)
+                )
+                if not symptom_q:
+                    symptom_q = word_q
+                else:
+                    symptom_q &= word_q
+            # Apply symptom filter; use AND logic for candidates to narrow down results
+            base_qs = base_qs.filter(symptom_q)
+        else:
+            # No body-part detected: broad search across all chapters
+            combined_q = Q()
+            for word in search_words:
+                search_term = word[:-2] if len(word) > 6 else word
+                word_q = (
+                    Q(name__icontains=search_term) |
+                    Q(name_hindi__icontains=search_term) |
+                    Q(parent__name__icontains=search_term) |
+                    Q(parent__parent__name__icontains=search_term) |
+                    Q(synonyms__synonym__icontains=search_term) |
+                    Q(modalities__name__icontains=search_term)
+                )
+                combined_q = word_q if not combined_q else combined_q | word_q
+            base_qs = base_qs.filter(combined_q)
+
+        # Fetch candidates for flexible OR matching (limited to 2000 for server stability)
+        rubrics_candidates = list(base_qs.distinct().prefetch_related('synonyms', 'modalities')[:2000])
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 6. PYTHON-SIDE SCORING
+        #    Score each rubric based on how well it matches all words
+        # ─────────────────────────────────────────────────────────────────────
+        
