@@ -162,6 +162,7 @@ export const uploadRepertoryPDF = (repertoryId, file) => {
   form.append('pdf', file);
   return api.post(`/repertories/${repertoryId}/upload-pdf`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 600000, // 10 minutes — large PDFs need time to upload + Cloudinary chunked processing
     onUploadProgress: (progressEvent) => {
       const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
       // Dispatch custom event for progress tracking
