@@ -22,7 +22,7 @@ export default function PatientDashboardTab({ currentUser = null, lang = 'en', n
 
   React.useEffect(() => {
     const newSocket = io('https://homeoai-backend-83yt.onrender.com', {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       withCredentials: true,
       auth: { token: localStorage.getItem('homeo_auth_token') },
       reconnection: true,
