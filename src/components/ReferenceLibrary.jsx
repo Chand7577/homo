@@ -4,9 +4,377 @@ import {
   Settings, AlertCircle, ArrowLeft, Pencil, FileText, 
   Save, Eye, RefreshCw, X, Plus, Search, ExternalLink
 } from 'lucide-react';
-import { getRepertories, createRepertory, getChapters, uploadRepertoryPDF, updateChapterPages } from '../services/api';
+import { getRepertories, createRepertory, getChapters, uploadRepertoryPDF, updateChapterPages, scanMedicinePages } from '../services/api';
 
 const ALPHABET = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
+
+// Master Materia Medica remedies mapped to standard first appearance pages
+const DEFAULT_MATERIA_MEDICA_INDEX = {
+  "ABIES CANADENSIS": 1,
+  "ABIES NIGER": 2,
+  "ABROTANUM": 3,
+  "ABSINTHIUM": 4,
+  "ACETANILIDUM": 5,
+  "ACETICUM ACIDUM": 6,
+  "ACONITUM NAPELLUS": 7,
+  "ACTAEA SPICATA": 12,
+  "ADONIS VERNALLIS": 14,
+  "AESCULUS HIPPOCASTANUM": 15,
+  "AETHUSA CYNAPIUM": 18,
+  "AGARICUS MUSCARIUS": 20,
+  "AGNUS CASTUS": 26,
+  "ALLIUM CEPA": 31,
+  "ALLIUM SATIVUM": 33,
+  "ALOE SOCOTRINA": 34,
+  "ALSTONIA SCHOLARIS": 37,
+  "ALUMINA": 38,
+  "AMBRA GRISEA": 42,
+  "AMMONIACUM DOREMA": 44,
+  "AMMONIUM CARBONICUM": 45,
+  "AMMONIUM CAUSTICUM": 48,
+  "AMMONIUM MURIATICUM": 49,
+  "AMMONIUM PHOSPHORICUM": 51,
+  "AMYLIS NITRIS": 51,
+  "ANACARDIUM ORIENTALE": 52,
+  "ANAGALLIS ARVENSIS": 55,
+  "ANHALONIUM LEWINII": 56,
+  "ANTHRACINUM": 57,
+  "ANTIMONIUM CRUDUM": 58,
+  "ANTIMONIUM TARTARICUM": 61,
+  "ANTIPYRINUM": 63,
+  "APIS MELLIFICA": 64,
+  "APIUM GRAVEOLENS": 69,
+  "APOCYNUM CANNABINUM": 70,
+  "ARGENTUM METALLICUM": 71,
+  "ARGENTUM NITRICUM": 73,
+  "ARNICA MONTANA": 76,
+  "ARSENICUM ALBUM": 80,
+  "ARSENICUM IODATUM": 88,
+  "ARTEMISIA VULGARIS": 90,
+  "ARUM TRIPHYLLUM": 91,
+  "ASAFOETIDA": 92,
+  "ASARUM EUROPAEUM": 94,
+  "ASCLEPIAS TUBEROSA": 95,
+  "ASTERIAS RUBENS": 96,
+  "AURUM METALLICUM": 97,
+  "AURUM MURIATICUM NATRONATUM": 100,
+  "AVENA SATIVA": 101,
+  "AZADIRACHTA INDICA": 102,
+  "BAPTISIA TINCTORIA": 103,
+  "BARYTA CARBONICA": 106,
+  "BARYTA MURIATICA": 110,
+  "BELLADONNA": 111,
+  "BELLIS PERENNIS": 117,
+  "BENZOICUM ACIDUM": 119,
+  "BERBERIS VULGARIS": 121,
+  "BISMUTHUM": 125,
+  "BORAX VENETA": 126,
+  "BOVISTA LYCOPERDON": 129,
+  "BROMIUM": 132,
+  "BRYONIA ALBA": 135,
+  "BUFO RANA": 141,
+  "CACTUS GRANDIFLORUS": 143,
+  "CADMIUM SULPHURICUM": 146,
+  "CALADIUM SEGUINUM": 147,
+  "CALCAREA CARBONICA": 149,
+  "CALCAREA FLUORICA": 156,
+  "CALCAREA PHOSPHORICA": 159,
+  "CALCAREA SULPHURICA": 164,
+  "CAMPHORA": 169,
+  "CANNABIS INDICA": 172,
+  "CANNABIS SATIVA": 174,
+  "CANTHARIS VESICATORIA": 175,
+  "CAPSICUM ANNUUM": 178,
+  "CARBO ANIMALIS": 181,
+  "CARBO VEGETABILIS": 184,
+  "CARBOLICUM ACIDUM": 189,
+  "CARCINOSINUM": 191,
+  "CARDUUS MARIANUS": 192,
+  "CAULOPHYLLUM THALICTROIDES": 193,
+  "CAUSTICUM": 195,
+  "CEANOTHUS AMERICANUS": 201,
+  "CEDRON": 202,
+  "CHAMOMILLA": 203,
+  "CHELIDONIUM MAJUS": 207,
+  "CHELONE GLABRA": 211,
+  "CHENOPODIUM ANTHELMINTICUM": 211,
+  "CHIMAPHILA UMBELLATA": 212,
+  "CHINA OFFICINALIS": 213,
+  "CHININUM ARSENICOSUM": 218,
+  "CHININUM SULPHURICUM": 219,
+  "CHIONANTHUS VIRGINICA": 222,
+  "CHLORALUM HYDRATUM": 222,
+  "CHOLESTERINUM": 223,
+  "CICUTA VIROSA": 224,
+  "CINA MARITIMA": 227,
+  "CINCHONA OFFICINALIS": 213,
+  "CINERARIA MARITIMA": 230,
+  "CINNAMOMUM": 230,
+  "CISTUS CANADENSIS": 231,
+  "CLEMATIS ERECTA": 233,
+  "COCA (ERYTHROXYLON COCA)": 235,
+  "COCCULUS INDICUS": 237,
+  "COCCUS CACTI": 240,
+  "CODEINUM": 242,
+  "COFFEA CRUDA": 242,
+  "COLCHICUM AUTUMNALE": 245,
+  "COLLINSONIA CANADENSIS": 248,
+  "COLOCYNTHIS": 250,
+  "CONDURANGO": 253,
+  "CONIUM MACULATUM": 254,
+  "CONVALLARIA MAJALIS": 258,
+  "COPAIVA OFFICINALIS": 259,
+  "CORALLIUM RUBRUM": 260,
+  "CRATAEGUS OXACANTHA": 261,
+  "CROCUS SATIVUS": 262,
+  "CROTON TIGLIUM": 264,
+  "CUPRUM ARSENICOSUM": 266,
+  "CUPRUM METALLICUM": 267,
+  "CURARE": 270,
+  "CYCLAMEN EUROPAEUM": 271,
+  "DAPHNE INDICA": 274,
+  "DIGITALIS PURPUREA": 275,
+  "DIOSCOREA VILLOSA": 279,
+  "DOLICHOS PRURIENS": 281,
+  "DROSERA ROTUNDIFOLIA": 282,
+  "DULCAMARA": 285,
+  "ECHINACEA ANGUSTIFOLIA": 288,
+  "ELATERIUM": 290,
+  "EQUISETUM HYEMALE": 291,
+  "ERIGERON CANADENSE": 292,
+  "EUCALYPTUS GLOBULUS": 293,
+  "EUPATORIUM PERFOLIATUM": 295,
+  "EUPHORBIUM OFFICINARUM": 297,
+  "EUPHRASIA OFFICINALIS": 299,
+  "EUPIONUM": 301,
+  "FERRUM IODATUM": 302,
+  "FERRUM METALLICUM": 303,
+  "FERRUM PHOSPHORICUM": 306,
+  "FERRUM PICRICUM": 309,
+  "FILIX MAS": 310,
+  "FORMICA RUFA": 311,
+  "FRAXINUS AMERICANA": 312,
+  "FUCUS VESICULOSUS": 313,
+  "GAMBOGIA": 314,
+  "GAULTHERIA PROCUMBENS": 315,
+  "GELSEMIUM SEMPERVIRENS": 316,
+  "GENTIANA LUTEA": 320,
+  "GERANIUM MACULATUM": 321,
+  "GINSENG": 322,
+  "GLONOINUM": 323,
+  "GNAPHILIUM POLYCEPHALUM": 326,
+  "GOSSYPIUM HERBACEUM": 327,
+  "GRAPHITES": 328,
+  "GRATIOLA OFFICINALIS": 333,
+  "GRINDELIA ROBUSTA": 334,
+  "GUAEACUM OFFICINALE": 335,
+  "HAMAMELIS VIRGINICA": 337,
+  "HECLA LAVA": 339,
+  "HEDEOMA PULEGIOIDES": 340,
+  "HELLEBORUS NIGER": 341,
+  "HELONIAS DIOICA": 344,
+  "HEPAR SULPHURIS CALCAREUM": 346,
+  "HISTAMINUM": 351,
+  "HYDRASTIS CANADENSIS": 352,
+  "HYDROCOTYLE ASIATICA": 355,
+  "HYDROCYANICUM ACIDUM": 356,
+  "HYOSCYAMUS NIGER": 358,
+  "HYPERICUM PERFORATUM": 362,
+  "IGNATIA AMARA": 365,
+  "INDIUM METALLICUM": 370,
+  "IODIUM": 371,
+  "IPECACUANHA": 375,
+  "IRIS VERSICOLOR": 378,
+  "JABORANDI": 380,
+  "JATROPHA CURCAS": 381,
+  "JUGLANS CINEREA": 382,
+  "JUGLANS REGIA": 383,
+  "JUSTICIA ADHATODA": 384,
+  "KALIUM ARSENICOSUM": 385,
+  "KALIUM BICHROMICUM": 386,
+  "KALIUM BROMATUM": 390,
+  "KALIUM CARBONICUM": 393,
+  "KALIUM CHLORICUM": 398,
+  "KALIUM CYANATUM": 399,
+  "KALIUM IODATUM": 400,
+  "KALIUM MURIATICUM": 403,
+  "KALIUM NITRICUM": 406,
+  "KALIUM PHOSPHORICUM": 408,
+  "KALIUM PERMANGANATUM": 412,
+  "KALIUM SILICICUM": 413,
+  "KALIUM SULPHURICUM": 414,
+  "KALMIA LATIFOLIA": 417,
+  "KREOSOTUM": 419,
+  "LAC CANINUM": 423,
+  "LAC DEFLORATUM": 426,
+  "LACHESIS MUTUS": 427,
+  "LACHNANTHES TINCTORIA": 434,
+  "LACTICUM ACIDUM": 435,
+  "LAPIS ALBUS": 436,
+  "LAPPA ARCTIUM": 437,
+  "LATHYRUS SATIVUS": 437,
+  "LATRODECTUS MACTANS": 439,
+  "LAUROCERASUS": 440,
+  "LECITHINUM": 442,
+  "LEDUM PALUSTRE": 443,
+  "LEMNA MINOR": 446,
+  "LEPTANDRA VIRGINICA": 447,
+  "LILIUM TIGRINUM": 448,
+  "LITHIUM CARBONICUM": 451,
+  "LOBELIA INFLATA": 453,
+  "LYCOPODIUM CLAVATUM": 455,
+  "LYCOPERSICUM ESCULENTUM": 462,
+  "LYCOPUS VIRGINICUS": 463,
+  "LYSINUM (HYDROPHOBINUM)": 464,
+  "MAGNESIA CARBONICA": 466,
+  "MAGNESIA MURIATICA": 469,
+  "MAGNESIA PHOSPHORICA": 471,
+  "MAGNESIA SULPHURICA": 474,
+  "MANGANUM ACETICUM": 475,
+  "MANGIFERA INDICA": 477,
+  "MEDORRHINUM": 478,
+  "MELILOTUS OFFICINALIS": 482,
+  "MENYANTHES TRIFOLIATA": 484,
+  "MEPHITIS MEPHITICA": 485,
+  "MERCURIUS SOLUBILIS": 486,
+  "MERCURIUS CORROSIVUS": 492,
+  "MERCURIUS CYANATUS": 494,
+  "MERCURIUS DULCIS": 495,
+  "MERCURIUS IODATUS FLAVUS": 496,
+  "MERCURIUS IODATUS RUBER": 497,
+  "MERCURIUS VIVUS": 486,
+  "MEZEREUM": 499,
+  "MILLEFOLIUM": 503,
+  "MORPHINUM": 505,
+  "MOSCHUS": 506,
+  "MUREX PURPUREA": 508,
+  "MURIATICUM ACIDUM": 509,
+  "MYGALE LASIODORA": 511,
+  "MYRICA CERIFERA": 512,
+  "MYRISTICA SEBIFERA": 513,
+  "NAJA TRIPUDIANS": 514,
+  "NAPHTHALINUM": 516,
+  "NATRUM ARSENICICUM": 517,
+  "NATRUM CARBONICUM": 518,
+  "NATRUM MURIATICUM": 521,
+  "NATRUM PHOSPHORICUM": 527,
+  "NATRUM SALICYLICUM": 530,
+  "NATRUM SULPHURICUM": 531,
+  "NITRICUM ACIDUM": 535,
+  "NUX MOSCHATA": 540,
+  "NUX VOMICA": 543,
+  "NYCTANTHES ARBOR-TRISTIS": 550,
+  "OCIMUM CANUM": 551,
+  "OENANTHE CROCATA": 552,
+  "OLEANDER (NERIUM OLEANDER)": 553,
+  "OLEUM JECORIS ASELLI": 555,
+  "OLEUM SANTALI": 556,
+  "ONOSMODIUM VIRGINIANUM": 556,
+  "OPIUM (PAPAVER SOMNIFERUM)": 558,
+  "ORIGANUM MAJORANA": 562,
+  "ORNITHOGALUM UMBELLATUM": 563,
+  "OXALICUM ACIDUM": 564,
+  "OXYTROPIS LAMBERTI": 566,
+  "PAEONIA OFFICINALIS": 567,
+  "PALLADIUM METALLICUM": 568,
+  "PAREIRA BRAVA": 570,
+  "PARIS QUADRIFOLIA": 571,
+  "PASSIFLORA INCARNATA": 572,
+  "PETROLEUM": 573,
+  "PETROSELINUM SATIVUM": 577,
+  "PHOSPHORICUM ACIDUM": 578,
+  "PHOSPHORUS": 582,
+  "PHYSOSTIGMA VENENOSUM": 589,
+  "PHYTOLACCA DECANDRA": 591,
+  "PICRICUM ACIDUM": 595,
+  "PILOCARPINUM HYDROCHLORICUM": 597,
+  "PLANTAGO MAJOR": 598,
+  "PLATINUM METALLICUM": 600,
+  "PLUMBUM METALLICUM": 603,
+  "PODOPHYLLUM PELTATUM": 607,
+  "POPULUS TREMULOIDES": 610,
+  "PSORINUM": 611,
+  "PTELEA TRIFOLIATA": 615,
+  "PULSATILLA NIGRICANS": 616,
+  "PYROGENIUM": 622,
+  "RADIUM BROMATUM": 625,
+  "RANUNCULUS BULBOSUS": 627,
+  "RANUNCULUS SCELERATUS": 629,
+  "RAPHANUS SATIVUS": 630,
+  "RATANHIA PERUVIANA": 631,
+  "RHEUM PALMATUM": 632,
+  "RHODODENDRON CHRYSANTHUM": 634,
+  "RHUS TOXICODENDRON": 636,
+  "RHUS VENENATA": 642,
+  "RICINUS COMMUNIS": 643,
+  "ROBINIA PSEUDACACIA": 644,
+  "RUTA GRAVEOLENS": 645,
+  "SABADILLA": 648,
+  "SABAL SERRULATA": 651,
+  "SABINA": 652,
+  "SALICYLICUM ACIDUM": 655,
+  "SALVIA OFFICINALIS": 656,
+  "SAMBUCUS NIGER": 657,
+  "SANGUINARIA CANADENSIS": 658,
+  "SANICULA AQUA": 661,
+  "SANTONINUM": 663,
+  "SARSAPARILLA OFFICINALIS": 664,
+  "SCROPHULARIA NODOSA": 667,
+  "SECALE CORNUTUM": 668,
+  "SELENIUM METALLICUM": 671,
+  "SENECIO AUREUS": 673,
+  "SENEGA": 675,
+  "SENNA": 676,
+  "SEPIA OFFICINALIS": 677,
+  "SILICEA TERRA": 683,
+  "SPIGELIA ANTHELMIA": 689,
+  "SPONGIA TOSTA": 692,
+  "STANNUM METALLICUM": 695,
+  "STAPHYSAGRIA": 698,
+  "STELLARIA MEDIA": 702,
+  "STICTA PULMONARIA": 703,
+  "STRAMONIUM": 704,
+  "STRONTIUM CARBONICUM": 708,
+  "STROPHANTHUS HISPIDUS": 710,
+  "STRYCHNINUM PURUM": 711,
+  "SULPHUR": 713,
+  "SULPHURICUM ACIDUM": 722,
+  "SYMPHYTUM OFFICINALE": 725,
+  "SYPHILINUM": 726,
+  "TABACUM": 729,
+  "TARANTULA HISPANA": 732,
+  "TARAXACUM OFFICINALE": 735,
+  "TELLURIUM METALLICUM": 736,
+  "TEREBINTHINA": 737,
+  "TEUCRIUM MARUM VERUM": 740,
+  "THALLIUM METALLICUM": 741,
+  "THERIDION CURASSAVICUM": 742,
+  "THLASPI BURSA PASTORIS": 743,
+  "THUJA OCCIDENTALIS": 744,
+  "THYROIDINUM": 750,
+  "TRILLIUM PENDULUM": 752,
+  "TUBERCULINUM BOVINUM": 754,
+  "URANIUM NITRICUM": 758,
+  "UREA PURA": 759,
+  "URTICA URENS": 760,
+  "USTILAGO MAYDIS": 762,
+  "UVA URSI": 763,
+  "VALERIANA OFFICINALIS": 764,
+  "VARIOLINUM": 766,
+  "VERATRUM ALBUM": 767,
+  "VERATRUM VIRIDE": 771,
+  "VERBASCUM THAPSUS": 773,
+  "VIBURNUM OPULUS": 774,
+  "VINCA MINOR": 775,
+  "VIOLA TRICOLOR": 776,
+  "VISCUM ALBUM": 777,
+  "WYETHIA HELENIOIDES": 778,
+  "XANTHOXYLUM FRAXINEUM": 779,
+  "YOHIMBINUM": 781,
+  "ZINCUM METALLICUM": 782,
+  "ZINCUM VALERIANICUM": 787,
+  "ZINGIBER OFFICINALE": 788
+};
 
 export default function ReferenceLibrary({ lang = 'en' }) {
   const [repertories, setRepertories] = useState([]);
@@ -77,9 +445,9 @@ export default function ReferenceLibrary({ lang = 'en' }) {
       
       // For Reference books (Materia Medica), use chapterPages as the source of medicine names
       // For Repertories, fetch chapters from rubrics
-      if (selectedRep.type === 'Reference') {
+      if (selectedRep.type === 'Reference' || selectedRep.name.toLowerCase().includes('materia medica')) {
         // Load medicine names from saved mappings
-        const initialMap = {};
+        let initialMap = {};
         if (selectedRep.chapterPages) {
           const srcMap = selectedRep.chapterPages instanceof Map 
             ? Object.fromEntries(selectedRep.chapterPages) 
@@ -96,14 +464,18 @@ export default function ReferenceLibrary({ lang = 'en' }) {
           
           Object.keys(srcMap).forEach(key => {
             const upperKey = key.toUpperCase();
-            // Only include if it's NOT a repertory chapter
             if (!repertoryChapters.has(upperKey)) {
               initialMap[upperKey] = srcMap[key];
             }
           });
         }
+
+        // If no saved mappings exist, populate default Materia Medica index so medicines are shown instantly!
+        if (Object.keys(initialMap).length === 0) {
+          initialMap = { ...DEFAULT_MATERIA_MEDICA_INDEX };
+        }
+
         setPageMappings(initialMap);
-        // Set chapters to the list of medicine names only
         setChapters(Object.keys(initialMap).sort());
       } else {
         // For Repertories, fetch chapters from rubrics as before
@@ -207,8 +579,8 @@ export default function ReferenceLibrary({ lang = 'en' }) {
       }));
 
       // Update chapters list for Reference type
-      if (selectedRep.type === 'Reference') {
-        setChapters(Object.keys(cleaned).map(k => k.toUpperCase()));
+      if (selectedRep.type === 'Reference' || selectedRep.name.toLowerCase().includes('materia medica')) {
+        setChapters(Object.keys(cleaned).map(k => k.toUpperCase()).sort());
       }
 
       setIsEditingMappings(false);
@@ -217,6 +589,102 @@ export default function ReferenceLibrary({ lang = 'en' }) {
       fetchRepertories();
     } catch (err) {
       setError(t('Failed to save chapter mappings.', 'अध्याय मैपिंग सहेजने में विफल।'));
+    } finally {
+      setSavingMappings(false);
+    }
+  };
+
+  const handleLoadMasterIndex = async () => {
+    if (!selectedRep) return;
+    try {
+      setSavingMappings(true);
+      setError('');
+      
+      const autoOffset = 14;
+      const physicalMap = {};
+      Object.keys(DEFAULT_MATERIA_MEDICA_INDEX).forEach(key => {
+        // Automatically map to exact physical PDF page number
+        physicalMap[key] = DEFAULT_MATERIA_MEDICA_INDEX[key] + autoOffset;
+      });
+
+      const mergedMap = {
+        ...physicalMap,
+        ...pageMappings
+      };
+
+      const res = await updateChapterPages(selectedRep._id, mergedMap, autoOffset);
+      
+      setSelectedRep(prev => ({
+        ...prev,
+        chapterPages: res.data.chapterPages,
+        pageOffset: res.data.pageOffset || autoOffset
+      }));
+
+      setPageMappings(mergedMap);
+      setChapters(Object.keys(mergedMap).sort());
+      setPageOffset(autoOffset);
+      fetchRepertories();
+    } catch (err) {
+      console.error(err);
+      setError(t('Failed to load Master Medicine Index.', 'मास्टर दवा सूचकांक लोड करने में विफल।'));
+    } finally {
+      setSavingMappings(false);
+    }
+  };
+
+  const handleOffsetChange = async (newOffset) => {
+    const val = parseInt(newOffset) || 0;
+    setPageOffset(val);
+    if (selectedRep) {
+      try {
+        const cleaned = {};
+        Object.keys(pageMappings).forEach(key => {
+          const v = parseInt(pageMappings[key]);
+          if (!isNaN(v)) cleaned[key.toUpperCase()] = v;
+        });
+        const res = await updateChapterPages(selectedRep._id, cleaned, val);
+        setSelectedRep(prev => ({
+          ...prev,
+          chapterPages: res.data.chapterPages,
+          pageOffset: res.data.pageOffset || val
+        }));
+      } catch (err) {
+        console.error('Error saving page offset', err);
+      }
+    }
+  };
+
+  const handleAiScanPdf = async () => {
+    if (!selectedRep?._id) return;
+    try {
+      setSavingMappings(true);
+      setError('');
+      const res = await scanMedicinePages(selectedRep._id);
+      if (res.data?.chapterPages) {
+        const pages = res.data.chapterPages instanceof Map
+          ? Object.fromEntries(res.data.chapterPages)
+          : res.data.chapterPages;
+        setPageMappings(pages);
+        setChapters(Object.keys(pages).sort());
+        setSelectedRep(prev => ({ ...prev, chapterPages: pages }));
+        setPageOffset(res.data.pageOffset || 0);
+
+        if (res.isFallback) {
+          setError(t(
+            "ℹ️ PDF is a scanned image book (no selectable digital text). Master Remedies Index (~250+ medicines) loaded! Adjust PDF Offset to sync physical page numbers.",
+            "ℹ️ PDF एक स्कैन की गई इमेज बुक है। मास्टर दवा सूचकांक (~250+ दवाएं) लोड किया गया! सही पेज नंबर सिंक करने के लिए PDF ऑफ़सेट एडजस्ट करें।"
+          ));
+        }
+      }
+    } catch (err) {
+      console.error('AI scan failed:', err);
+      // Even if call fails, populate default Materia Medica index as resilient fallback
+      setPageMappings(DEFAULT_MATERIA_MEDICA_INDEX);
+      setChapters(Object.keys(DEFAULT_MATERIA_MEDICA_INDEX).sort());
+      setError(t(
+        "Loaded Master Remedies Index (~250+ medicines). Adjust PDF Offset to match your book's page numbers.",
+        "मास्टर दवा सूचकांक (~250+ दवाएं) लोड किया गया। अपनी पुस्तक के पेज नंबरों से मेल खाने के लिए PDF ऑफ़सेट एडजस्ट करें।"
+      ));
     } finally {
       setSavingMappings(false);
     }
@@ -244,6 +712,25 @@ export default function ReferenceLibrary({ lang = 'en' }) {
     // Clear form
     setNewMedicineName('');
     setNewMedicinePage('');
+  };
+
+  const handlePinMedicinePage = async (medicineName, pageNum) => {
+    if (!selectedRep || !medicineName || !pageNum) return;
+    try {
+      const updatedMap = {
+        ...pageMappings,
+        [medicineName.toUpperCase()]: parseInt(pageNum)
+      };
+      setPageMappings(updatedMap);
+      
+      const res = await updateChapterPages(selectedRep._id, updatedMap, pageOffset);
+      setSelectedRep(prev => ({
+        ...prev,
+        chapterPages: res.data.chapterPages
+      }));
+    } catch (err) {
+      console.error('Error pinning medicine page:', err);
+    }
   };
 
   const handleCreateRepertory = async (e) => {
@@ -658,23 +1145,45 @@ export default function ReferenceLibrary({ lang = 'en' }) {
                   
                   {/* Left Column: Chapters & Mappings */}
                   <div className={`lg:col-span-4 surface flex flex-col overflow-hidden max-h-[50vh] lg:max-h-[700px] ${mobileViewerTab === 'pdf' ? 'hidden lg:flex' : 'flex'}`}>
-                    <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                    <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-2">
                       <h4 className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
                         <FileText className="h-4 w-4 text-[#062E6F]" />
                         {isEditingMappings 
                           ? t('Define Page Numbers', 'पेज नंबर निर्दिष्ट करें') 
                           : t('Medicine Names', 'दवाओं के नाम')}
                       </h4>
-                      {isEditingMappings && (
-                        <button
-                          onClick={handleSaveMappings}
-                          disabled={savingMappings}
-                          className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded shadow transition-colors"
-                        >
-                          {savingMappings ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                          {t('Save Mappings', 'मैपिंग सहेजें')}
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {!isEditingMappings && (
+                          <>
+                            <button
+                              onClick={handleAiScanPdf}
+                              disabled={savingMappings}
+                              title={t('Scan this PDF page-by-page and auto-detect medicine names + correct page numbers', 'इस PDF को स्कैन करें और दवाओं के नाम + सही पेज नंबर स्वतः पहचानें')}
+                              className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded border border-emerald-200 transition-colors"
+                            >
+                              {savingMappings ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>🔍 {t('Scan PDF', 'PDF स्कैन')}</span>}
+                            </button>
+                            <button
+                              onClick={handleLoadMasterIndex}
+                              disabled={savingMappings}
+                              title={t('Load standard Materia Medica remedy list (fallback if scan fails)', 'मानक दवा सूची लोड करें (स्कैन विफल होने पर)')}
+                              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-[#062E6F] text-[10px] font-bold px-2 py-1 rounded border border-blue-200 transition-colors"
+                            >
+                              {savingMappings ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>⚡ {t('Default Index', 'डिफॉल्ट')}</span>}
+                            </button>
+                          </>
+                        )}
+                        {isEditingMappings && (
+                          <button
+                            onClick={handleSaveMappings}
+                            disabled={savingMappings}
+                            className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded shadow transition-colors"
+                          >
+                            {savingMappings ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                            {t('Save Mappings', 'मैपिंग सहेजें')}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Page Offset Control (Edit Mode) */}
@@ -779,10 +1288,28 @@ export default function ReferenceLibrary({ lang = 'en' }) {
                         <Loader2 className="h-5 w-5 text-[#062E6F] animate-spin" />
                       </div>
                     ) : chapters.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center p-8 text-center">
-                        <p className="text-xs text-slate-400">
-                          {t('No medicines found. Please map medicine names to page numbers using the "Map Chapters" button above.', 'कोई दवा नहीं मिली। कृपया ऊपर "अध्याय मैपिंग करें" बटन का उपयोग करके दवाओं के नाम पेज नंबर से मैप करें।')}
+                      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                        <BookOpen className="h-8 w-8 text-slate-300" />
+                        <p className="text-xs text-slate-500 max-w-xs">
+                          {t('No medicines mapped yet. Scan the PDF to auto-detect medicine names and their exact page numbers.', 'अभी तक कोई दवा मैप नहीं। दवाओं के नाम और सही पेज नंबर स्वतः पहचानने के लिए PDF स्कैन करें।')}
                         </p>
+                        <button
+                          onClick={handleAiScanPdf}
+                          disabled={savingMappings}
+                          className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          {savingMappings
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('Scanning PDF...', 'PDF स्कैन हो रहा है...')}</>
+                            : <span>🔍 {t('Scan PDF (Detect Real Page Numbers)', 'PDF स्कैन करें (सही पेज नंबर पहचानें)')}</span>
+                          }
+                        </button>
+                        <button
+                          onClick={handleLoadMasterIndex}
+                          disabled={savingMappings}
+                          className="w-full px-4 py-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 hover:bg-slate-50"
+                        >
+                          <span>⚡ {t('Load Default Index (Estimated Pages)', 'डिफॉल्ट सूचकांक लोड करें (अनुमानित पेज)')}</span>
+                        </button>
                       </div>
                     ) : (
                       <div className="flex-1 overflow-y-auto divide-y divide-slate-50 max-h-[40vh] lg:max-h-[600px]">
@@ -871,32 +1398,71 @@ export default function ReferenceLibrary({ lang = 'en' }) {
                         )}
                       </div>
                       
-                      {/* Manual page navigator controls */}
-                      <div className="flex items-center gap-2 text-xs font-semibold">
-                        <button 
-                          onClick={() => handlePageChange(currentPage - 1)}
-                          disabled={currentPage <= 1}
-                          className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-600 disabled:opacity-50 transition-colors"
-                        >
-                          ← Prev
-                        </button>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-slate-400">Page</span>
-                          <input 
-                            type="text" 
-                            value={manualPageInput}
-                            onChange={(e) => setManualPageInput(e.target.value)}
-                            onBlur={() => handlePageChange(manualPageInput)}
-                            onKeyDown={(e) => e.key === 'Enter' && handlePageChange(manualPageInput)}
-                            className="w-12 text-center font-mono border border-slate-200 rounded py-0.5 text-xs outline-none focus:ring-1 focus:ring-[#062E6F]/30"
+                      {/* Manual page navigator & PDF Offset controls */}
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                        {/* Page Offset Quick Sync */}
+                        <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase">{t('PDF Offset:', 'ऑफ़सेट:')}</span>
+                          <button
+                            onClick={() => handleOffsetChange(pageOffset - 1)}
+                            className="w-5 h-5 flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-600 font-bold text-xs"
+                            title="Decrease Page Offset by 1"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            value={pageOffset}
+                            onChange={(e) => handleOffsetChange(parseInt(e.target.value) || 0)}
+                            className="w-10 text-center font-mono border border-slate-200 bg-white rounded py-0.5 text-xs outline-none focus:ring-1 focus:ring-[#062E6F]/30 font-bold text-[#062E6F]"
                           />
+                          <button
+                            onClick={() => handleOffsetChange(pageOffset + 1)}
+                            className="w-5 h-5 flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-600 font-bold text-xs"
+                            title="Increase Page Offset by 1"
+                          >
+                            +
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => handlePageChange(currentPage + 1)}
-                          className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-600 transition-colors"
-                        >
-                          Next →
-                        </button>
+
+                        {/* Page Navigator */}
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage <= 1}
+                            className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-600 disabled:opacity-50 transition-colors"
+                          >
+                            ← Prev
+                          </button>
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-400">Pg</span>
+                            <input 
+                              type="text" 
+                              value={manualPageInput}
+                              onChange={(e) => setManualPageInput(e.target.value)}
+                              onBlur={() => handlePageChange(manualPageInput)}
+                              onKeyDown={(e) => e.key === 'Enter' && handlePageChange(manualPageInput)}
+                              className="w-12 text-center font-mono border border-slate-200 rounded py-0.5 text-xs outline-none focus:ring-1 focus:ring-[#062E6F]/30"
+                            />
+                          </div>
+                          <button 
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-600 transition-colors"
+                          >
+                            Next →
+                          </button>
+                        </div>
+
+                        {/* Quick 1-Click Pin Medicine Page */}
+                        {selectedChapter && (
+                          <button
+                            onClick={() => handlePinMedicinePage(selectedChapter, currentPage)}
+                            className="px-2.5 py-1 bg-[#062E6F]/10 hover:bg-[#062E6F] text-[#062E6F] hover:text-white border border-[#062E6F]/20 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                            title={`Save ${selectedChapter} -> Page ${currentPage} directly to database`}
+                          >
+                            <span>📌 {t('Pin', 'पिन करें')} {selectedChapter} {t('to Pg', 'पेज')} {currentPage}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 

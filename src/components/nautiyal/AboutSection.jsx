@@ -130,7 +130,7 @@ export default function AboutSection() {
             <li><strong>Email:</strong> drjpnaut@gmail.com</li>
             <li><strong>Summer Hours (Apr-Sep):</strong> Mon-Sat, 9:00 AM - 1:00 PM, 4:30 PM - 8:00 PM</li>
             <li><strong>Winter Hours (Oct-Mar):</strong> Mon-Sat, 10:00 AM - 1:00 PM, 4:00 PM - 7:00 PM</li>
-            <li><strong>Sunday:</strong> Closed</li>
+            <li><strong>Sunday:</strong> Only on Appointment</li>
           </ul>
           <h3 className="text-xl font-primary-semibold text-[#062E6F] mt-6">Book a Consultation</h3>
           <p className="text-gray-700 leading-relaxed">

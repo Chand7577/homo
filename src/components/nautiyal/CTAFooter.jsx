@@ -233,7 +233,7 @@ export default function CTAFooter({ onBookClick }) {
                 <div className="space-y-1 font-primary-regular text-[#F8F9FA]/70 text-sm">
                   <div>Mon – Sat (Summer): 9:00 AM – 1:00 PM, 4:30 PM – 8:00 PM</div>
                   <div>Mon – Sat (Winter): 10:00 AM – 1:00 PM, 4:00 PM – 7:00 PM</div>
-                  <div className="text-[#C86B5E] font-primary-bold mt-2">Sunday: Closed</div>
+                  <div className="text-[#C86B5E] font-primary-bold mt-2">Sunday: Only on Appointment</div>
                 </div>
                 
                 <button

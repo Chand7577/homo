@@ -172,5 +172,7 @@ export const uploadRepertoryPDF = (repertoryId, file) => {
 };
 export const updateChapterPages = (repertoryId, chapterPages, pageOffset) => 
   api.put(`/repertories/${repertoryId}/chapter-pages`, { chapterPages, pageOffset }).then(r => r.data);
+export const scanMedicinePages = (repertoryId) =>
+  api.post(`/repertories/${repertoryId}/scan-medicine-pages`, {}, { timeout: 120000 }).then(r => r.data);
 
 export default api;

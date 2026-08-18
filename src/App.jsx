@@ -69,15 +69,17 @@ import {
 function App() {
   // Main view state: 'website' for Dr. J.P. Nautiyal public website, 'app' for clinical portal
   const [viewMode, setViewMode] = useState(() => {
-    // Default to 'app' (login) - users can access website via banner/logo
     const path = window.location.pathname;
     if (path === '/website' || path.includes('/website')) return 'website';
-    return 'app'; // Show login by default
+    return 'website'; // Default to website when on root or first load
   });
+
+  const isPopStateRef = React.useRef(false);
 
   // Sync viewMode with browser history
   useEffect(() => {
     const handlePopState = () => {
+      isPopStateRef.current = true;
       const path = window.location.pathname;
       setViewMode(path === '/website' || path.includes('/website') ? 'website' : 'app');
     };
@@ -86,8 +88,12 @@ function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Update browser history when viewMode changes
+  // Update browser history when viewMode changes via user interaction
   useEffect(() => {
+    if (isPopStateRef.current) {
+      isPopStateRef.current = false;
+      return;
+    }
     const currentPath = window.location.pathname;
     const targetPath = viewMode === 'website' ? '/website' : '/';
     
