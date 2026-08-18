@@ -600,10 +600,10 @@ export default function ReferenceLibrary({ lang = 'en' }) {
       setSavingMappings(true);
       setError('');
       
-      const autoOffset = 14;
+      const autoOffset = 11;
       const physicalMap = {};
       Object.keys(DEFAULT_MATERIA_MEDICA_INDEX).forEach(key => {
-        // Automatically map to exact physical PDF page number
+        // Automatically map to exact physical PDF page number (+11 for Boericke 8th Ed)
         physicalMap[key] = DEFAULT_MATERIA_MEDICA_INDEX[key] + autoOffset;
       });
 
