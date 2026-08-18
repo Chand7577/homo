@@ -10,19 +10,19 @@ const ALPHABET = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
 
 // Master Materia Medica remedies mapped to standard first appearance pages
 const DEFAULT_MATERIA_MEDICA_INDEX = {
-  "ABIES CANADENSIS": 1,
-  "ABIES NIGER": 2,
-  "ABROTANUM": 3,
-  "ABSINTHIUM": 4,
-  "ACETANILIDUM": 5,
-  "ACETICUM ACIDUM": 6,
-  "ACONITUM NAPELLUS": 7,
-  "ACTAEA SPICATA": 12,
-  "ADONIS VERNALLIS": 14,
-  "AESCULUS HIPPOCASTANUM": 15,
-  "AETHUSA CYNAPIUM": 18,
-  "AGARICUS MUSCARIUS": 20,
-  "AGNUS CASTUS": 26,
+  "ABIES CANADENSIS": 12,
+  "ABIES NIGER": 14,
+  "ABROTANUM": 15,
+  "ABSINTHIUM": 17,
+  "ACETANILIDUM": 19,
+  "ACETICUM ACIDUM": 20,
+  "ACONITUM NAPELLUS": 21,
+  "ACTAEA SPICATA": 23,
+  "ADONIS VERNALLIS": 25,
+  "AESCULUS HIPPOCASTANUM": 26,
+  "AETHUSA CYNAPIUM": 29,
+  "AGARICUS MUSCARIUS": 31,
+  "AGNUS CASTUS": 37,
   "ALLIUM CEPA": 31,
   "ALLIUM SATIVUM": 33,
   "ALOE SOCOTRINA": 34,
@@ -601,11 +601,7 @@ export default function ReferenceLibrary({ lang = 'en' }) {
       setError('');
       
       const autoOffset = 11;
-      const physicalMap = {};
-      Object.keys(DEFAULT_MATERIA_MEDICA_INDEX).forEach(key => {
-        // Automatically map to exact physical PDF page number (+11 for Boericke 8th Ed)
-        physicalMap[key] = DEFAULT_MATERIA_MEDICA_INDEX[key] + autoOffset;
-      });
+      const physicalMap = { ...DEFAULT_MATERIA_MEDICA_INDEX };
 
       const mergedMap = {
         ...physicalMap,
@@ -782,8 +778,8 @@ export default function ReferenceLibrary({ lang = 'en' }) {
   const getPdfIframeUrl = (pdfUrl) => {
     if (!pdfUrl || !selectedRep) return '';
     
-    // Add page offset to calculate the physical PDF page number
-    const physicalPage = currentPage + (pageOffset || 0);
+    // currentPage stores physical PDF page number directly
+    const physicalPage = currentPage;
     
     // For Google Drive URLs, use Google Drive's embedded viewer
     if (pdfUrl.includes('drive.google.com')) {
@@ -1474,10 +1470,10 @@ export default function ReferenceLibrary({ lang = 'en' }) {
                         <span className="font-semibold text-slate-700">{selectedChapter}</span>
                         <span className="text-slate-400">•</span>
                         <span className="text-slate-500">
-                          {t('Book Page:', 'पुस्तक पृष्ठ:')} <strong className="text-slate-700">{currentPage}</strong>
-                          {pageOffset !== 0 && (
+                          {t('PDF Page:', 'PDF पृष्ठ:')} <strong className="text-slate-700">{currentPage}</strong>
+                          {pageOffset > 0 && currentPage > pageOffset && (
                             <span className="text-[10px] text-slate-400 ml-2">
-                              ({t('PDF Page:', 'PDF पृष्ठ:')} {currentPage + (pageOffset || 0)})
+                              ({t('Book Page:', 'पुस्तक पृष्ठ:')} {currentPage - pageOffset})
                             </span>
                           )}
                         </span>
